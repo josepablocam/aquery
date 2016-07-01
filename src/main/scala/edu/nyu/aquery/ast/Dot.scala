@@ -31,7 +31,7 @@ object Dot {
    * @tparam T extends AST so that we can call dotify on it
    * @return
    */
-  protected[ast] def strList[T](l: List[T], currAvail: Int, fn: (T, Int) => (String, Int))
+  protected[ast] def strList[T](l: Seq[T], currAvail: Int, fn: (T, Int) => (String, Int))
     : (String, Int) = {
     l.foldLeft(("", currAvail)) { case ((str, id), e) =>
         val (addStr, newId) = fn(e, id)
@@ -45,10 +45,15 @@ object Dot {
    * @param prog
    * @return
    */
-  def toGraph(prog: AST[_]): String = {
+  def toGraph(prog: Seq[TopLevel]): String = {
     val entryNode = declareNode(0, "AQuery Entry")
-    val entryEdge = declareEdge(0, 1)
-    val (progGraph, _) = prog.dotify(1)
-    "digraph G {\n" + entryNode + entryEdge + progGraph + "}\n"
+    // type inference seems to need help below
+    val dotGraph = strList[TopLevel](prog, 1, { case (node: TopLevel, i: Int) =>
+      val edge = Dot.declareEdge(0, i)
+      val (graph, nextId) = TopLevel.dotify(node, i)
+      (edge + graph, nextId)
+    })._1
+
+    "digraph G {\n" + entryNode + dotGraph + "}\n"
   }
 }

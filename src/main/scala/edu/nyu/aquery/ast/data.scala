@@ -72,7 +72,6 @@ case class Insert(
  */
 trait DataIO extends AST[DataIO] with TopLevel {
   def file: String
-  def t: String
   def sep: String
   def dotify(currAvail: Int) = DataIO.dotify(this, currAvail)
   def transform(f: PartialFunction[DataIO, DataIO]) = this
@@ -90,21 +89,21 @@ case class Load(
   sep: String) extends DataIO
 
 /**
- * Save table to `sep`-separated file
+ * Save query to `sep`-separated file
  * @param file name of file
- * @param t table to save data from
+ * @param query table to save data from
  * @param sep string used to separate values on each line
  */
 case class Save(
   file: String,
-  t: String,
+  query: Query,
   sep: String) extends DataIO
 
 object DataIO {
   def dotify(o: DataIO, currAvail: Int) = {
     val nodeLabel = o match {
-      case Save(_, _, _) => s"save ${o.t} to ${o.file} with ${o.sep} sep"
-      case Load(_, _, _) => s"load ${o.file} into ${o.t} with ${o.sep} sep"
+      case Save(f, _, s) => s"save query to $f with $s sep"
+      case Load(f, t, s) => s"load $f into $t with $s sep"
     }
     val node = Dot.declareNode(currAvail, nodeLabel)
     (node, currAvail + 1)

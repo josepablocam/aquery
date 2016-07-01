@@ -11,3 +11,14 @@ trait TopLevel {
     }
   }
 }
+
+object TopLevel {
+  def dotify(o: TopLevel, i: Int): (String, Int) = o match {
+    case q: Query => q.dotify(i)
+    case v: VerbatimCode => v.dotify(i)
+    case io: DataIO => io.dotify(i)
+    case u: UDF => u.dotify(i)
+    case m: ModificationQuery => m.dotify(i)
+    case t: TableModification => t.dotify(i)
+  }
+}

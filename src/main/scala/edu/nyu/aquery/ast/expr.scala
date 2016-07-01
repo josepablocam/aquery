@@ -1,7 +1,7 @@
 package edu.nyu.aquery.ast
 
 /**
- * Basic (side-effect-less) expression in AST
+ * Basic expression in AST
  */
 trait Expr extends AST[Expr]
 
@@ -159,14 +159,15 @@ case object Odd extends IndexOperator
 // every-N indices
 case class Every(v: Int) extends IndexOperator
 // f[EVEN/ODD/EVERY N]
-case class ArrayIndex(a: String, ix: IndexOperator) extends CallExpr {
+case class ArrayIndex(e: Expr, ix: IndexOperator) extends CallExpr {
   def dotify(currAvail: Int): (String, Int) = {
     val indexOp = ix match {
       case Even => "even"
       case Odd => "odd"
       case Every(n) => "every " + n
     }
-    val indexExpr = a + "[" + indexOp + "]"
+    val arrayExpr = e.dotify(currAvail)._1
+    val indexExpr =  arrayExpr + "[" + indexOp + "]"
     (indexExpr, currAvail + 1)
   }
   def transform(f: PartialFunction[Expr, Expr]): Expr = transform0(f)

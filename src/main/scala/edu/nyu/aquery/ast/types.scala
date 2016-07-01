@@ -11,6 +11,7 @@ case object TypeInt extends TypeName
 case object TypeFloat extends TypeName
 case object TypeString extends TypeName
 case object TypeDate extends TypeName
+case object TypeTimestamp extends TypeName
 case object TypeBoolean extends TypeName
 
 object TypeName {
@@ -21,6 +22,7 @@ object TypeName {
       case TypeString => "string"
       case TypeDate => "date"
       case TypeBoolean => "boolean"
+      case TypeTimestamp => "timestamp"
     }
     val typeNode = Dot.declareNode(currAvail, typeLabel)
     (typeNode, currAvail + 1)

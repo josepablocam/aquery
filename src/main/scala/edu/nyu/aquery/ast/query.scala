@@ -38,7 +38,7 @@ trait RelAlg extends AST[RelAlg] with Analyzable with TopLevel {
 case class Query(
   local: List[(String, List[String], RelAlg)],
   main: RelAlg,
-  attr: Map[Any, Any] = Map()) extends AST[Query] with Analyzable {
+  attr: Map[Any, Any] = Map()) extends AST[Query] with Analyzable with TopLevel {
   def setAttr(k: Any, v: Any) = this.copy(attr = attr.updated(k, v))
 
   def dotify(currAvail: Int) = {
@@ -125,8 +125,8 @@ case class SortBy(
 
 // Possible directions for sorting
 trait OrderDirection
-case object ASC extends OrderDirection
-case object DESC extends OrderDirection
+case object Asc extends OrderDirection
+case object Desc extends OrderDirection
 
 
 // Possible types of join
@@ -259,7 +259,7 @@ object RelAlg {
       val rightEdge = Dot.declareEdge(currAvail, rightId)
       val (rightNode, condId) = r.dotify(rightId)
       val condEdge = Dot.declareEdge(currAvail, condId)
-      val condLabel = cond.map(_.dotify(condId)._1).mkString(", ")
+      val condLabel = "conds: " + cond.map(_.dotify(condId)._1).mkString(", ")
       val condNode = Dot.declareNode(condId, condLabel)
       (joinNode + leftEdge + leftNode + rightEdge + rightNode + condEdge + condNode, condId + 1)
     }
