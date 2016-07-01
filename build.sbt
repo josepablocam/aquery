@@ -12,3 +12,4 @@ parallelExecution in Test := false
 
 fork in run := true
 
+scalacOptions ++= Seq("-feature", "-deprecation")
