@@ -194,12 +194,14 @@ object AqueryParser extends StandardTokenParsers with PackratParsers {
       (AS ~> "(" ~> topApply <~ ")") ^^ { case n ~ cs ~ q => (n, cs.getOrElse(Nil), q)}
 
   // Users can apply a function to the overall result of a query. Note that the function
-  // Can only take the query as an argument. This stems from queries not being first-order
-  // expressions in AQuery
+  // Can only take the query as an argument. Furthermore, the function must be a keyword
+  // so as to avoid ambiguity. Consider the case:
+  // SELECT * FROM t g(SELECT * from N). g can be viewed as a function applied to the second
+  // query or as a correlation name for the table in the first query's from-clause. Making
+  // this a keyword resolves this issue.
   def topApply: Parser[RelAlg] =
     (
-      ((ident
-        | SHOW ^^^ "SHOW"
+      ((SHOW ^^^ "SHOW"
         | EXEC <~ ARRAYS ^^^ "EXEC_ARRAYS"
         | DISTINCT ^^^ "DISTINCT"
         ) ~
