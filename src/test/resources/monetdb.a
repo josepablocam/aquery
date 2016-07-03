@@ -1,0 +1,29 @@
+<q>
+nums:get `:tables/random_numbers
+sort_asc:asc;
+qver_quantile:{[x;y] $[0 <> f:if - i;(f * v i+1) - f * v i;0.0]+v i:floor if:-0.5+%[;100] y*n:count v:asc x};
+</q>
+
+
+FUNCTION naive_quantile(v, pct){
+  sorted_v := sort_asc(v);
+  n := count(v);
+  ix := (pct * n / 100) - 0.5;
+  i := floor(ix);
+  q_v := sorted_v(i);
+  f := ix - i;
+  extra := CASE WHEN f != 0 THEN
+    f * sorted_v(i + 1) - f * sorted_v(i)
+    ELSE 0.0 END;
+    
+  enlist(extra + q_v)
+}
+
+//FUNCTION smart_quantile(v, pct) {
+// TODO: fill this in
+//}
+
+select naive_quantile(val, 95) from nums
+
+select naive_quantile(val, 5) from nums
+
