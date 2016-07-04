@@ -8,13 +8,15 @@ edu.nyu.aquery.ast contains all representations for AST
 edu.nyu.aquery.parse contains all parsing code
 
 TODO:
-1 - tests for ast/parsing
-2 - analyzer (serial)
-   - order-dependence
-   - grouped
-3 - Optimizer (serial)
-4 - Code gen (serial)
+* analyzer (serial)
+   * order-dependence
+     * functions (mutual recursion)
+     * expressions in queries
+   * grouped
+   * join references
+* Optimizer (serial)
+* Code gen (serial)
 
-5 - Analyzer (parallel)
-6 - Optimizer (parallel)
-7- Code gen (parallel)
+* Analyzer (parallel)
+* Optimizer (parallel)
+* Code gen (parallel)
