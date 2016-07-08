@@ -24,6 +24,8 @@ trait Analyzable {
  * as top-level constructs in AQuery
  */
 trait RelAlg extends AST[RelAlg] with Analyzable with TopLevel {
+  def expr: Seq[Expr]
+  def children: Seq[RelAlg]
   def dotify(currAvail: Int): (String, Int) = RelAlg.dotify(this, currAvail)
   def transform(f: PartialFunction[RelAlg, RelAlg]) = RelAlg.transform(this, f)
 }
@@ -79,6 +81,8 @@ case class Project(
   t: RelAlg,
   ps: List[(Expr, Option[String])],
   attr: Map[Any, Any] = Map()) extends RelAlg {
+  val children = List(t)
+  val expr = ps.map(_._1)
   def setAttr(k: Any, v: Any) = this.copy(attr = attr.updated(k, v))
 }
 
@@ -92,6 +96,8 @@ case class Filter(
   t: RelAlg,
   fs: List[Expr],
   attr: Map[Any, Any] = Map()) extends RelAlg {
+  val children = List(t)
+  val expr = fs
   def setAttr(k: Any, v: Any) = this.copy(attr = attr.updated(k, v))
 }
 
@@ -107,6 +113,8 @@ case class GroupBy(
   gs: List[(Expr, Option[String])],
   having: List[Expr],
   attr: Map[Any, Any] = Map()) extends RelAlg {
+  val children = List(t)
+  val expr = gs.map(_._1) ++ having
   def setAttr(k: Any, v: Any) = this.copy(attr = attr.updated(k, v))
 }
 
@@ -120,6 +128,8 @@ case class SortBy(
   t: RelAlg,
   os: List[(OrderDirection, String)],
   attr: Map[Any, Any] = Map()) extends RelAlg {
+  val children = List(t)
+  val expr: Seq[Expr] = Nil
   def setAttr(k: Any, v: Any) = this.copy(attr = attr.updated(k, v))
 }
 
@@ -146,6 +156,8 @@ case class Table(
   n: String,
   alias: Option[String],
   attr: Map[Any, Any] = Map()) extends RelAlg {
+  val children: Seq[RelAlg] = Nil
+  val expr: Seq[Expr] = Nil
   def setAttr(k: Any, v: Any) = this.copy(attr = attr.updated(k, v))
 }
 
@@ -160,6 +172,8 @@ case class TopApply(
   f: String,
   t: RelAlg,
   attr: Map[Any, Any] = Map()) extends RelAlg {
+  val children = List(t)
+  val expr: Seq[Expr] = Nil
   def setAttr(k: Any, v: Any) = this.copy(attr = attr.updated(k, v))
 }
 
@@ -175,6 +189,8 @@ case class BottomApply(
   f: String,
   args: List[Expr],
   attr: Map[Any, Any] = Map()) extends RelAlg {
+  val children: Seq[RelAlg] = Nil
+  val expr = args
   def setAttr(k: Any, v: Any) = this.copy(attr = attr.updated(k, v))
 }
 
@@ -193,6 +209,8 @@ case class Join(
   r: RelAlg,
   cond: List[Expr],
   attr: Map[Any, Any] = Map()) extends RelAlg {
+  val children = List(l, r)
+  val expr = cond
   def setAttr(k: Any, v: Any) = this.copy(attr = attr.updated(k, v))
 }
 
