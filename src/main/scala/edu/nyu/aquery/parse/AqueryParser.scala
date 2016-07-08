@@ -282,6 +282,7 @@ object AqueryParser extends StandardTokenParsers with PackratParsers {
   // Predicates commonly used in where clauses
   // This is a bit dense but the general idea is we're trying to avoid repetition just due
   // to optional NOT. NOT becomes a wrapping function that simply negates original predicate
+  // predicates become function calls
   def predicate: Parser[Expr] =
     (expr ~ NOT.? ~ (
       (BETWEEN ~ (expr <~ AND) ~ expr) ^^ { case b ~ e1 ~ e2 => FunCall(b.str, List(e1, e2)) }
@@ -294,7 +295,7 @@ object AqueryParser extends StandardTokenParsers with PackratParsers {
         wrapWithOptFun(n.map(_.str), FunCall(f, e :: args))
     }
       | expr ~ IS ~ NOT.? ~ bool ^^ { case e ~ i ~ n ~ b =>
-      n.map( _ => Neq(e, b)).getOrElse(Eq(e, b))
+      BinExpr(n.map( _ => Neq).getOrElse(Eq), e, b)
     }
       | expr ~ IS ~ NOT.? <~ NULL ^^ { case e ~ i ~ n =>
       wrapWithOptFun(n.map(_.str), FunCall(NULL.str, List(e)))
@@ -425,53 +426,53 @@ object AqueryParser extends StandardTokenParsers with PackratParsers {
 
   // Expressions, productions encode precedence and associativity
   lazy val expr: PackratParser[Expr] = (
-    (expr <~ "|") ~ and ^^ { case o ~ a => Lor(o, a)}
+    (expr <~ "|") ~ and ^^ { case o ~ a => BinExpr(Lor, o, a)}
     | and
    )
 
   lazy val and: PackratParser[Expr] =
-    ( (and <~ "&") ~ eq ^^ { case a ~ e => Land(a, e) }
+    ( (and <~ "&") ~ eq ^^ { case a ~ e => BinExpr(Land, a, e) }
       | eq
       )
 
   lazy val eq: PackratParser[Expr] = (
-    eq ~ ("=" | "!=") ~ rel ^^ { case e ~ op ~ r => if(op == "==") Eq(e, r) else Neq(e, r) }
+    eq ~ ("=" | "!=") ~ rel ^^ { case e ~ op ~ r => BinExpr(if(op == "==") Eq else Neq, e, r) }
     |  rel
     )
 
   lazy val rel: PackratParser[Expr] = (
     rel ~ ("<=" | ">=" | "<" | ">") ~ add ^^ {
-        case r ~ opStr ~ a => (opStr match {
+        case r ~ opStr ~ a => BinExpr(opStr match {
           case "<=" => Le
           case ">=" => Ge
           case "<" => Lt
           case ">" => Gt
-        })(r, a)
+        }, r, a)
       }
     | add
     )
 
   lazy val add: PackratParser[Expr] =
-    (add ~ ("+" | "-") ~ mult ^^ {case a ~ op ~ m => if(op == "+") Plus(a, m) else Minus(a, m) }
+    (add ~ ("+" | "-") ~ mult ^^ {case a ~ op ~ m => BinExpr(if(op == "+") Plus else Minus, a, m) }
     | mult
    )
 
   lazy val mult: PackratParser[Expr] = (
-    mult ~ ("*" | "/") ~ pow ^^ { case m ~ op ~ p => if(op == "*") Times(m, p) else Div(m, p) }
+    mult ~ ("*" | "/") ~ pow ^^ { case m ~ op ~ p => BinExpr(if(op == "*") Times else Div, m, p) }
     | pow
     )
 
   def pow: Parser[Expr] = (
-    (unary <~ "^") ~ pow ^^ { case  u ~ e => Exp(u, e) }
+    (unary <~ "^") ~ pow ^^ { case  u ~ e => BinExpr(Exp, u, e) }
     | unary
     )
 
   def unary: Parser[Expr] =
-    (("!" | "-") ~ baseExp ^^ { case op ~ e => if(op == "!") Not(e) else
+    (("!" | "-") ~ baseExp ^^ { case op ~ e => if(op == "!") UnExpr(Not, e) else
       e match {
         case IntLit(v) => IntLit(-v)
         case FloatLit(v) => FloatLit(-v)
-        case _ => Neg(e)
+        case _ => UnExpr(Neg, e)
       }
     }
       | baseExp
