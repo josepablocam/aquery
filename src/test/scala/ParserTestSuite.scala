@@ -2,6 +2,7 @@ import edu.nyu.aquery.ast._
 import edu.nyu.aquery.parse.AqueryParser
 import edu.nyu.aquery.parse.AqueryParser._
 
+import scala.collection.generic.SeqFactory
 import scala.language.implicitConversions
 import scala.io.Source
 import org.scalatest.FunSuite
@@ -17,6 +18,15 @@ class ParserTestSuite extends FunSuite {
   implicit def asExpr(s: String): Expr = StringLit(s)
 
   implicit def asExpr(c: Char): Expr = Id(c.toString)
+
+  // some convenience wrappers
+  def makeBinExpr(op: BinOp): (Expr, Expr) => BinExpr = (l, r) => BinExpr(op, l, r)
+  val plus = makeBinExpr(Plus)
+  val times = makeBinExpr(Times)
+  val div = makeBinExpr(Div)
+  val gt = makeBinExpr(Gt)
+  val lt = makeBinExpr(Lt)
+
 
   /**
    * Convenience function to validate parse resukts
@@ -46,15 +56,14 @@ class ParserTestSuite extends FunSuite {
   test("arithmetic") {
     // positive tests
     assert(
-      expectParse(expr, "2 * 3 + 4 / 5 + 7")(Some(Plus(Plus(Times(2, 3), Div(4, 5)), 7) == _)),
+      expectParse(expr, "2 * 3 + 4 / 5 + 7")(Some(plus(plus(times(2, 3), div(4, 5)), 7) == _)),
       "should parse with precedence and left associative"
     )
     assert(
       expectParse(expr, "f(g(1,2,3), h()) + (3 + 4)")(
-        Some({
-         case Plus(FunCall("f", List(FunCall("g", _), _)), Plus(IntLit(3), IntLit(4))) => true
-         case _ => false
-        })),
+        Some(
+          plus(FunCall("f", List(FunCall("g", List(1, 2, 3)), FunCall("h", Nil))), plus(3, 4)) == _
+        )),
       "should parse functions with function args, parentheses should change associativity"
     )
 
@@ -66,7 +75,7 @@ class ParserTestSuite extends FunSuite {
     // positive tests
     // simple cases
     val simpleS = "CASE WHEN x > 2 THEN 3 WHEN x < 0 THEN 4 * 10 END"
-    val simpleE = Case(None, List(IfThen(Gt('x', 2), 3), IfThen(Lt('x', 0), Times(4, 10))), None)
+    val simpleE = Case(None, List(IfThen(gt('x', 2), 3), IfThen(lt('x', 0), times(4, 10))), None)
 
     val elseS = "CASE WHEN x > 2 THEN 3 WHEN x < 0 THEN 4 * 10 ELSE f() END"
     val elseE = simpleE.copy(e = Some(FunCall("f", Nil)))
@@ -82,7 +91,7 @@ class ParserTestSuite extends FunSuite {
     val nestedS = "case g() WHEN 1 THEN (case WHEN y > 0 then 0 END) END"
     val nestedE = Case(
         Some(FunCall("g", Nil)),
-        IfThen(1, Case(None, IfThen(Gt('y', 0), 0) :: Nil, None)) :: Nil,
+        IfThen(1, Case(None, IfThen(gt('y', 0), 0) :: Nil, None)) :: Nil,
         None)
     assert(expectParse(expr, nestedS)(Some(nestedE == _)), "nested case expression")
 
@@ -108,9 +117,9 @@ class ParserTestSuite extends FunSuite {
       "t",
       ("c1", IntLit(10)) :: Nil,
       (Asc, "c") :: Nil,
-      Gt('a', 10) :: Nil,
+      gt('a', 10) :: Nil,
       'h' :: Nil,
-      Gt(FunCall("SUMS", 'a' :: Nil), 10) :: Nil
+      gt(FunCall("SUMS", 'a' :: Nil), 10) :: Nil
     )
     assert(expectParse(update, uS)(Some(uE == _)), "parse update")
   }
@@ -126,10 +135,10 @@ class ParserTestSuite extends FunSuite {
       """
     val dRE = Delete(
       "t",
-      Right(Gt(FunCall("SUMS", 'c' :: Nil), 100) :: Nil),
+      Right(gt(FunCall("SUMS", 'c' :: Nil), 100) :: Nil),
       (Asc, "c1") :: Nil,
       'a' :: Nil,
-      Gt(FunCall("MAX", 'd' :: Nil), 20) :: Nil
+      gt(FunCall("MAX", 'd' :: Nil), 20) :: Nil
     )
     assert(expectParse(delete, dRS)(Some(dRE == _)), "row-wise deletion")
 
@@ -148,7 +157,7 @@ class ParserTestSuite extends FunSuite {
     assert(expectParse(udf, "FUNCTION f(){}")(Some(UDF("f", Nil, Nil) == _)), "empty function")
     assert(expectParse(udf, "FUNCTION g(x, y){}")(Some(UDF("g", List("x","y"), Nil) == _)), "with args")
     assert(expectParse(udf, "FUNCTION f(x){ a := 10; a * 100 }")
-      (Some(UDF("f", List("x"), Left(Assign("a", 10)) :: Right(Times('a', 100)) :: Nil) == _)),
+      (Some(UDF("f", List("x"), Left(Assign("a", 10)) :: Right(times('a', 100)) :: Nil) == _)),
       "full function"
     )
     // negative tests
@@ -197,8 +206,8 @@ class ParserTestSuite extends FunSuite {
     """
     val p1 = Project(_: RelAlg, List((FunCall("SUM", 'a' :: Nil), Some("sumA"))))
     val s1 = SortBy(_: RelAlg, (Asc, "c1") :: (Asc, "c2") :: Nil)
-    val g1 = GroupBy(_: RelAlg, List((Times('c', 10), Some("ced"))), List(Gt(FunCall("COUNT", 'd' :: Nil), 10)))
-    val w1 = Filter(_: RelAlg, List(Gt('a', 100), Lt('b', 20)))
+    val g1 = GroupBy(_: RelAlg, List((times('c', 10), Some("ced"))), List(gt(FunCall("COUNT", 'd' :: Nil), 10)))
+    val w1 = Filter(_: RelAlg, List(gt('a', 100), lt('b', 20)))
 
     val q1E = (s1 andThen w1 andThen g1 andThen p1)(Table("t", None))
     assert(expectParse(query, q1S)(Some(q1E == _)), "parsed simple query with all components")
