@@ -6,7 +6,8 @@ import scala.annotation.tailrec
 import scala.io.Source
 
 import edu.nyu.aquery.parse.AqueryParser
-import edu.nyu.aquery.ast.Dot
+import edu.nyu.aquery.ast.{Dot, TopLevel, UDF}
+import edu.nyu.aquery.analysis.{AnalysisTypes, FunctionInfo, TypeChecker, UDFSummary}
 
 /**
  * AQuery executable. Takes various command line arguments.
@@ -21,6 +22,7 @@ object Aquery extends App {
         -c: generated code
         -a: optimization level
         -s: silence warnings
+        -tc: (soft) type checking (off by default)
         -o: code output file (if none, then stdout)
         If both -p and -c are set, will only perform last specified
       """.split("\n").map(_.trim).filter(_.length > 0).mkString("\n")
@@ -28,13 +30,16 @@ object Aquery extends App {
   }
 
   abstract class CompilerActions
+
   case object Graph extends CompilerActions
+
   case object Compile extends CompilerActions
 
   case class AqueryConfig(
     action: CompilerActions = Compile,
     optim: Int = 0,
     silence: Boolean = false,
+    typeCheck: Boolean = false,
     input: Option[String] = None,
     output: Option[String] = None)
 
@@ -50,9 +55,12 @@ object Aquery extends App {
     case (c, "-o" :: f :: rest) if f(0) != '-' => parseConfig(c.map(_.copy(output = Some(f))), rest)
     case (c, "-h" :: _) => None
     case (c, "-s" :: rest) => parseConfig(c.map(_.copy(silence = true)), rest)
+    case (c, "-tc" :: rest) => parseConfig(c.map(_.copy(typeCheck = true)), rest)
     case (c, f :: Nil) if f(0) != '-' => c.map(_.copy(input = Some(f)))
     case _ => None
   }
+
+  // Configuration -------------------------------------------------------------
 
   val defaultConfig: Option[AqueryConfig] = Some(AqueryConfig())
   val config = parseConfig(defaultConfig, args.toList).getOrElse {
@@ -61,20 +69,46 @@ object Aquery extends App {
     AqueryConfig()
   }
 
+  // Parsing -------------------------------------------------------------
+
   val inFile = config.input.map(Source.fromFile).getOrElse(Source.stdin)
   val contents = inFile.getLines().mkString("\n")
   inFile.close()
 
-  val parsed = AqueryParser(contents)  match {
+  val parsed = AqueryParser(contents) match {
     case AqueryParser.Success(prog, _) => Some(prog)
-    case err @ AqueryParser.Error(_, _)  =>
+    case err@AqueryParser.Error(_, _) =>
       println(err.toString)
       None
-    case err @ AqueryParser.Failure(_, _) =>
+    case err@AqueryParser.Failure(_, _) =>
       println(err.toString)
-     None
+      None
   }
 
+
+  // (Soft) Type Checking  ---------------------------------------------------
+  val typeCheck = (prog: Seq[TopLevel]) => {
+    // UDFs are checkd solely for number of args to call
+    val ctFunArgs = (s: FunctionInfo, f: UDF) => {
+      val nArgs = f.args.length
+      val summary = new UDFSummary(f.n, List.fill(nArgs)(AnalysisTypes.unk))
+      // add 2 entries, one with args length, another without
+      s.write(FunctionInfo.asName(f.n, nArgs), summary).write(f.n, summary)
+    }
+    // environment is collected sequentially
+    val env = FunctionInfo(prog.collect { case f: UDF => f }, ctFunArgs)
+    // type check with the current environment
+    TypeChecker(env)(prog)
+  }
+
+  val typeErrors = for (prog <- parsed if config.typeCheck) yield typeCheck(prog)
+
+  typeErrors.foreach { errs =>
+    errs.sortBy(e => (e.pos.line, e.pos.column)).foreach(println)
+    if (errs.nonEmpty) System.exit(1)
+  }
+
+  // Action -------------------------------------------------------------
   val representation = parsed.map { p =>
     config.action match {
       case Graph => Dot.toGraph(p)
@@ -82,6 +116,7 @@ object Aquery extends App {
     }
   }
 
+  // Output -------------------------------------------------------------
   val outFile = config.output.map(f => new PrintStream(new File(f))).getOrElse(System.out)
   representation.foreach(outFile.print)
   outFile.close()
