@@ -266,4 +266,6 @@ object TypeChecker {
     val checker = new TypeChecker(env)
     checker.typeCheck(prog)
   }
+
+  def apply(): TypeChecker = new TypeChecker(FunctionInfo.unit())
 }
