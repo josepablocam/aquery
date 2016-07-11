@@ -1,10 +1,25 @@
 package edu.nyu.aquery.ast
 
+import scala.annotation.tailrec
+
 /**
  * Basic expression in AST
  */
 trait Expr extends AST[Expr] {
   def children: Seq[Expr]
+
+  /**
+   * Sequence of all subexpressions (including self) in an expression
+   * @return
+   */
+  def allSubExpressions: Seq[Expr] = {
+    @tailrec
+    def loop(exprs: Seq[Expr], acc: Seq[Expr]): Seq[Expr] = exprs match {
+      case Nil => acc
+      case e :: ex => loop(e.children ++ ex,  e.children ++ acc)
+    }
+    loop(List(this), List(this))
+  }
 }
 
 // Identifiers
