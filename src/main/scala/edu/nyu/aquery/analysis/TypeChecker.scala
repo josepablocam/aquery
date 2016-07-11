@@ -85,16 +85,16 @@ class TypeChecker(info: FunctionInfo) {
    */
   def checkCallExpr(expr: CallExpr): (TypeTag, Seq[AnalysisError]) = expr match {
     case FunCall(f, args) =>
-      // if we have info from builtin then analyze accordingly, otherwise just check for
-      // simple errors
-      info(f, args.length).map { x =>
-        val argErrors = x.argTypes.zip(args).flatMap { case (t, a) => checkTypeTag(t, a) }
-        (x.returnType, argErrors)
+      // if we have a match, then check arguments etc and get appropriate return type
+      info(f).map { x =>
+        val typesAndErrors = args.map(e => checkExpr(e))
+        val argTypes = typesAndErrors.map(_._1)
+        val argErrors = typesAndErrors.flatMap(_._2)
+        val ret = x.signature.lift(argTypes)
+        val badCall = ret.map(_ => Nil).getOrElse(BadCall(f, expr.pos) :: Nil)
+        (ret.getOrElse(TUnknown), badCall ++ argErrors)
       }.getOrElse {
-        val wrongArgsError = info(f).map { x =>
-          List(NumArgsError(x.f, x.numArgs, args.length, expr.pos))
-        }.getOrElse(Nil)
-        (TUnknown, wrongArgsError ++ args.flatMap(a => checkExpr(a)._2))
+        (TUnknown, args.flatMap(a => checkExpr(a)._2))
       }
     // TODO: size checks as part of type analysis
     case ArrayIndex(e, _) => (TUnknown, checkExpr(e)._2)
@@ -250,9 +250,20 @@ class TypeChecker(info: FunctionInfo) {
     case v: VerbatimCode => List()
   }
 
-  def apply(prog: Seq[TopLevel]): Seq[AnalysisError] = prog.flatMap(checkTopLevel)
+  def typeCheck(prog: Seq[TopLevel]): Seq[AnalysisError] = prog.flatMap(checkTopLevel)
+
 }
 
 object TypeChecker {
-  def apply(info: FunctionInfo) = new TypeChecker(info)
+  def apply(prog: Seq[TopLevel]): Seq[AnalysisError] = {
+    // UDFs are checked solely for number of args to call
+    val ctFunArgs = (s: FunctionInfo, f: UDF) => {
+      s.write(f.n, new UDFSummary(f.n, { case x if x.length == f.args.length => TUnknown }))
+    }
+    // environment is collected sequentially
+    val env = FunctionInfo(prog.collect { case f: UDF => f }, ctFunArgs)
+    // type check with the current environment
+    val checker = new TypeChecker(env)
+    checker.typeCheck(prog)
+  }
 }

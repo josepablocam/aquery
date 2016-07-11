@@ -10,82 +10,72 @@ import AnalysisTypes._
  * The companion object contains definitions for built-ins
  */
 class FunctionInfo(val info: Map[String, FunctionSummary]) {
-  def apply(f: String, numArgs: Int): Option[FunctionSummary] = info.get(FunctionInfo.asName(f, numArgs))
   def apply(f: String): Option[FunctionSummary] = info.get(f)
-  def write(f: String, summary: FunctionSummary): FunctionInfo = new FunctionInfo(info.updated(f, summary))
+  def write(f: String, summary: FunctionSummary): FunctionInfo =
+    new FunctionInfo(info.updated(f, summary))
 }
 
 object FunctionInfo {
+  type Sig = PartialFunction[Seq[TypeTag], TypeTag]
+  // numeric to numeric
+  val num_Num: Sig = { case v :: Nil if v.consistent(num) => TNumeric }
+  // boolean to boolean
+  val bool_Bool: Sig = { case v :: Nil if v.consistent(bool) => TBoolean }
+  // self to self
+  val self_Self: Sig = { case v :: Nil => v }
+  // boolean to numeric
+  val bool_Num: Sig = { case v :: Nil if v.consistent(bool) => TNumeric }
+
+  // multiple types for single argument
+  val boolOrNum_Self: Sig = { case v :: Nil if v.consistent(numAndBool) => v }
+  val boolOrNum_Num: Sig = { case v :: Nil if v.consistent(numAndBool) => TNumeric }
+
+  // Multiple arguments
+  val numAndSelf_Self: Sig = { case a :: v :: Nil if a.consistent(num) => v }
+  val selfAndSelf_Self: Sig  = { case a :: v :: Nil if a.consistent(Set(v)) => v }
+  val selfAndSelf_Bool: Sig = { case a :: b :: Nil if a.consistent(Set(b)) => TBoolean }
+  val numAndBoolOrNum_Num: Sig =
+    { case a :: v :: Nil if a.consistent(num) && v.consistent(numAndBool) => TNumeric}
+  val numAndBoolOrNum_Self: Sig =
+    { case a :: v :: Nil if a.consistent(num) && v.consistent(numAndBool) => v }
+
+
   val normal = Set(
-    new BuiltInSummary("ABS", List(num), TNumeric, false),
-    new BuiltInSummary("AVG", List(num), TNumeric, false),
-    new BuiltInSummary("COUNT",  List(unk), TNumeric, false),
-    new BuiltInSummary("FILL",  List(unk), TUnknown, false),
-    new BuiltInSummary("IN",  List(unk, unk), TBoolean, false),
-    new BuiltInSummary("Like",  List(unk, unk), TBoolean, false),
-    new BuiltInSummary("BETWEEN",  List(num, num, num), TBoolean, false),
-    new BuiltInSummary("MAX",  List(numAndBool), TNumeric, false),
-    new BuiltInSummary("MIN",  List(numAndBool), TNumeric, false),
-    new BuiltInSummary("NOT",  List(bool), TBoolean, false),
-    new BuiltInSummary("NULL",  List(unk), TBoolean, false),
-    new BuiltInSummary("OR", List(bool, bool), TBoolean, false),
-    new BuiltInSummary("PRD",  List(numAndBool), TNumeric, false),
-    new BuiltInSummary("SQRT",  List(num), TNumeric, false),
-    new BuiltInSummary("SUM",  List(numAndBool), TNumeric, false)
+    new BuiltInSummary("ABS", num_Num, false),
+    new BuiltInSummary("AVG", boolOrNum_Num, false),
+    new BuiltInSummary("COUNT", { case x :: Nil => TNumeric }, false),
+    new BuiltInSummary("FILL", selfAndSelf_Self, false),
+    new BuiltInSummary("IN", { case x :: xs if xs.forall(_.consistent(Set(x))) => TBoolean }, false),
+    new BuiltInSummary("LIKE", selfAndSelf_Bool, false),
+    new BuiltInSummary("BETWEEN", { case xs if xs.forall(_.consistent(num)) => TBoolean }, false),
+    new BuiltInSummary("MAX", boolOrNum_Self, false),
+    new BuiltInSummary("MIN", boolOrNum_Self, false),
+    new BuiltInSummary("NOT", bool_Bool, false),
+    new BuiltInSummary("NULL", { case x :: Nil  => TBoolean }, false),
+    new BuiltInSummary("OR", { case xs if xs.forall(_.consistent(bool)) => TBoolean } , false),
+    new BuiltInSummary("PRD", boolOrNum_Num, false),
+    new BuiltInSummary("SQRT", num_Num, false),
+    new BuiltInSummary("SUM",  num_Num orElse bool_Num, false)
   )
 
   val orderDependent = Set(
-    // avgs(vec)
-    new BuiltInSummary("AVGS",  List(numAndBool), TNumeric, true),
-    // avgs(2, vec) overload
-    new BuiltInSummary("AVGS",  List(numAndBool, numAndBool), TNumeric, true),
-    new BuiltInSummary("DELTAS",  List(num), TNumeric, true),
-    new BuiltInSummary("DROP",  List(num, unk), TNumeric, true),
-    new BuiltInSummary("FILLS",  List(unk), TUnknown, true),
-    // first(vec)
-    new BuiltInSummary("FIRST",  List(unk), TUnknown, true),
-    // first(10, vec)
-    new BuiltInSummary("FIRST",  List(num, unk), TUnknown, true),
-    // last(vec)
-    new BuiltInSummary("LAST",  List(unk), TUnknown, true),
-    // last(10, vec)
-    new BuiltInSummary("LAST",  List(num, unk), TUnknown, true),
-    // maxs(vec)
-    new BuiltInSummary("MAXS",  List(numAndBool), TNumeric, true),
-    // maxs(2, vec) overload
-    new BuiltInSummary("MAXS",  List(num, numAndBool), TNumeric, true),
-    // mins(vec)
-    new BuiltInSummary("MINS",  List(numAndBool), TNumeric, true),
-    // mins(2, vec) overload
-    new BuiltInSummary("MINS",  List(num, numAndBool), TNumeric, true),
-    // prev(vec)
-    new BuiltInSummary("PREV",  List(unk), TUnknown, true),
-    // prev(2, vec) overload
-    new BuiltInSummary("PREV",  List(num, unk), TUnknown, true),
-    new BuiltInSummary("PRD",  List(numAndBool), TNumeric, true),
-    // prev(2, vec) overload
-    new BuiltInSummary("PRDS",  List(num, numAndBool), TUnknown, true),
-    // sums(vec)
-    new BuiltInSummary("SUMS",  List(numAndBool), TUnknown, true),
-    // sums(2, vec) overload
-    new BuiltInSummary("SUMS",  List(num, numAndBool), TUnknown, true),
-    new BuiltInSummary("VARS",  List(num, num), TUnknown, true)
+    new BuiltInSummary("AVGS", boolOrNum_Num orElse numAndBoolOrNum_Num, true),
+    new BuiltInSummary("DELTAS", num_Num, true),
+    new BuiltInSummary("DROP",  numAndSelf_Self, true),
+    new BuiltInSummary("FILLS", self_Self orElse selfAndSelf_Self, true),
+    // TODO: first/last should have size check
+    new BuiltInSummary("FIRST", self_Self orElse numAndSelf_Self, true),
+    new BuiltInSummary("LAST", self_Self orElse numAndSelf_Self, true),
+    new BuiltInSummary("MAXS", boolOrNum_Self orElse numAndBoolOrNum_Self, true),
+    new BuiltInSummary("MINS", boolOrNum_Self orElse numAndBoolOrNum_Self, true),
+    new BuiltInSummary("NEXT", self_Self orElse numAndSelf_Self, true),
+    new BuiltInSummary("PREV", self_Self orElse numAndSelf_Self, true),
+    new BuiltInSummary("PRDS", boolOrNum_Num orElse numAndBoolOrNum_Num, true),
+    new BuiltInSummary("SUMS", boolOrNum_Num orElse numAndBoolOrNum_Num, true),
+    new BuiltInSummary("VARS", boolOrNum_Num orElse numAndBoolOrNum_Num, true)
   )
 
-  private val SEP_CHAR = '!'
-
-  /**
-   * Combine function name and arguments to create a name
-   * @param f
-   * @param n
-   * @return
-   */
-  def asName(f: String, n: Int): String = f + SEP_CHAR + n
-
-  // include version w/ and w/o num of arguments to find issues at call
-  val defaultInfo = (normal ++ orderDependent).flatMap { x =>
-    List(asName(x.f.toUpperCase, x.numArgs) -> x, x.f -> x)
-  }.toMap
+  val defaultInfo = (normal ++ orderDependent).map { x => x.f -> x }.toMap
 
   /**
    * Return a function info with all built-ins and default info
