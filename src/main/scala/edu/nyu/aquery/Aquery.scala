@@ -86,7 +86,7 @@ object Aquery extends App {
   }
 
   // (Soft) Type Checking  ---------------------------------------------------
-  val typeErrors = for (prog <- parsed if config.typeCheck) yield TypeChecker(prog)
+  val typeErrors = for (prog <- parsed if config.typeCheck) yield TypeChecker(prog).typeCheck(prog)
 
   typeErrors.foreach { errs =>
     errs.sortBy(e => (e.pos.line, e.pos.column)).foreach(println)
