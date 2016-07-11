@@ -124,6 +124,7 @@ object AqueryParser extends StandardTokenParsers with PackratParsers {
   protected val MIN = Keyword("MIN", fun = true)
   protected val MINS = Keyword("MINS", fun = true)
   protected val MOVING = Keyword("MOVING", fun = true)
+  protected val NEXT = Keyword("NEXT", fun = true)
   protected val NOT = Keyword("NOT", fun = true)
   protected val NULL = Keyword("NULL")
   protected val ODD = Keyword("ODD")
