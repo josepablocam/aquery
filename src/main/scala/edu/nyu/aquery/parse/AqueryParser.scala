@@ -98,6 +98,7 @@ object AqueryParser extends StandardTokenParsers with PackratParsers {
   protected val FALSE = Keyword("FALSE")
   protected val FIELDS = Keyword("FIELDS")
   protected val FILL = Keyword("FILL", fun = true)
+  protected val FILLS = Keyword("FILLS", fun = true)
   protected val FIRST = Keyword("FIRST", fun = true)
   protected val FLATTEN = Keyword("FLATTEN", fun = true)
   protected val FLOAT = Keyword("FLOAT")
@@ -123,6 +124,7 @@ object AqueryParser extends StandardTokenParsers with PackratParsers {
   protected val MIN = Keyword("MIN", fun = true)
   protected val MINS = Keyword("MINS", fun = true)
   protected val MOVING = Keyword("MOVING", fun = true)
+  protected val NEXT = Keyword("NEXT", fun = true)
   protected val NOT = Keyword("NOT", fun = true)
   protected val NULL = Keyword("NULL")
   protected val ODD = Keyword("ODD")
@@ -142,7 +144,7 @@ object AqueryParser extends StandardTokenParsers with PackratParsers {
   protected val SHOW = Keyword("SHOW")
   protected val SQRT = Keyword("SQRT", fun = true)
   protected val STDDEV = Keyword("STDDEV", fun = true)
-  protected val STRING = Keyword("STRING", fun = true)
+  protected val STRING = Keyword("STRING")
   protected val SUM = Keyword("SUM", fun = true)
   protected val SUMS = Keyword("SUMS", fun = true)
   protected val TABLE = Keyword("TABLE")
@@ -186,7 +188,7 @@ object AqueryParser extends StandardTokenParsers with PackratParsers {
      Local queries are only visible within their given set
    */
   def fullQuery: Parser[Query] =
-    (WITH ~> localQuery.+).? ~ topApply ^^ { case locals ~ q => Query(locals.getOrElse(Nil), q) }
+    positioned((WITH ~> localQuery.+).? ~ topApply ^^ { case locals ~ q => Query(locals.getOrElse(Nil), q) })
 
   // Local query consists of a name, column names and a relational algebra result
   def localQuery: Parser[(String, List[String], RelAlg)] =
@@ -200,7 +202,7 @@ object AqueryParser extends StandardTokenParsers with PackratParsers {
   // query or as a correlation name for the table in the first query's from-clause. Making
   // this a keyword resolves this issue.
   def topApply: Parser[RelAlg] =
-    (
+    positioned(
       ((SHOW ^^^ "SHOW"
         | EXEC <~ ARRAYS ^^^ "EXEC_ARRAYS"
         | DISTINCT ^^^ "DISTINCT"
@@ -210,7 +212,7 @@ object AqueryParser extends StandardTokenParsers with PackratParsers {
       )
 
   // We assemble a query with incremental relational algebra operations
-  def query: Parser[RelAlg] =
+  def query: Parser[RelAlg] = positioned(
     SELECT ~>
     DISTINCT.? ~
     rep1sep(projection, ",") ~
@@ -226,7 +228,7 @@ object AqueryParser extends StandardTokenParsers with PackratParsers {
         val grouped = gh.map { case (g, h) => GroupBy(filtered, g, h) }.getOrElse(filtered)
         val projected = Project(grouped, p)
         d.map(x => TopApply(x.str, projected)).getOrElse(projected)
-    }
+    })
 
   // Projections
   def projection: Parser[(Expr, Option[String])] =
@@ -236,7 +238,7 @@ object AqueryParser extends StandardTokenParsers with PackratParsers {
   // for now we only consider joins based on USING. Condition based joins can use ',' and filters
   // Joins are left-associative
   lazy val from: PackratParser[RelAlg] =
-    (from ~ (INNER ~> JOIN ~> simpleTable) ~ (USING ~> using) ^^ { case l ~ r ~ c =>
+    positioned(from ~ (INNER ~> JOIN ~> simpleTable) ~ (USING ~> using) ^^ { case l ~ r ~ c =>
       Join(InnerJoinUsing, l, r, c)
     }
      | from ~ (FULL ~> OUTER ~> JOIN ~> simpleTable) ~ (USING ~> using) ^^ { case l ~ r ~ c =>
@@ -256,14 +258,14 @@ object AqueryParser extends StandardTokenParsers with PackratParsers {
   // Simple table name with optional alias ("as" is also optional)
   // So t, t as t1, and t t1 are all valid simple tables
   def simpleTable: Parser[RelAlg] =
-    ident ~ (AS.? ~> ident).? ^^ {case n ~ a => Table(n, a)}
+    positioned(ident ~ (AS.? ~> ident).? ^^ {case n ~ a => Table(n, a)})
 
   // Generate a table from a function call
   // note that these cannot be aliased. This is to restrict their use.
   // Users can easily do something like
   // WITH myTable AS (SELECT * FROM f()) SELECT mt.c1 FROM myTable as mt
   def bottomApply: Parser[RelAlg] =
-     funCall ^^ { case FunCall(f, args) => BottomApply(f, args) }
+     positioned(funCall ^^ { case FunCall(f, args) => BottomApply(f, args) })
 
   // Order-clause, tuples of direction and column
   def order: Parser[List[(OrderDirection, String)]] = rep1sep(orderPair, ",")
@@ -284,7 +286,7 @@ object AqueryParser extends StandardTokenParsers with PackratParsers {
   // to optional NOT. NOT becomes a wrapping function that simply negates original predicate
   // predicates become function calls
   def predicate: Parser[Expr] =
-    (expr ~ NOT.? ~ (
+    positioned(expr ~ NOT.? ~ (
       (BETWEEN ~ (expr <~ AND) ~ expr) ^^ { case b ~ e1 ~ e2 => FunCall(b.str, List(e1, e2)) }
         | IN ~ (
           expr ^^ { List(_) }
@@ -320,14 +322,14 @@ object AqueryParser extends StandardTokenParsers with PackratParsers {
 
   // Verbatim code, handled at tokenizer level
   def verbatim: Parser[VerbatimCode] =
-    elem("verbatim code", _.isInstanceOf[lexical.Verbatim]) ^^ { c => VerbatimCode(c.chars) }
+    positioned(elem("verbatim code", _.isInstanceOf[lexical.Verbatim]) ^^ { c => VerbatimCode(c.chars) })
 
   // Update statements
   // Allow order clauses (applied to entire table before update)
   // Selections
   // Group by (with optional having)
   def update: Parser[Update] =
-    UPDATE ~> ident ~
+    positioned(UPDATE ~> ident ~
       (SET ~> rep1sep(elemUpdate, ",")) ~
       (ASSUMING ~> order).? ~
       (WHERE ~> where).? ~
@@ -336,7 +338,7 @@ object AqueryParser extends StandardTokenParsers with PackratParsers {
       }).? ^^ { case t ~ u ~ o ~ w ~ gh  =>
       val (gL, hL) = gh.getOrElse((Nil, Nil))
       Update(t, u, o.getOrElse(Nil), w.getOrElse(Nil), gL, hL)
-    }
+    })
 
   // one element in an update statement
   def elemUpdate: Parser[(String, Expr)] = (ident <~ "=") ~ expr ^^ { case f ~ v => f -> v }
@@ -346,7 +348,7 @@ object AqueryParser extends StandardTokenParsers with PackratParsers {
   // deletion based on columns (case 2) (i.e. col-wise deletion)
   // Note that group-by must have a having clause
   def delete: Parser[Delete] =
-    (DELETE ~> FROM ~> ident ~
+    positioned(DELETE ~> FROM ~> ident ~
       (ASSUMING ~> order).? ~
       (WHERE ~> where).? ~
       (GROUP ~> BY ~> rep1sep(expr, ",") ~ (HAVING ~> rep1sep(expr, ","))).? ^^ {
@@ -365,10 +367,10 @@ object AqueryParser extends StandardTokenParsers with PackratParsers {
   // the order of insertion can also be modified
   // the order clause applies to the new data to be inserted
   def insert: Parser[Insert] =
-    INSERT ~> INTO ~> ident ~
+    positioned(INSERT ~> INTO ~> ident ~
       (ASSUMING ~> order).? ~
       modInsert.? ~
-      srcInsert ^^ { case n ~ o ~ m ~ s => Insert(n, o.getOrElse(Nil), m.getOrElse(Nil), s)}
+      srcInsert ^^ { case n ~ o ~ m ~ s => Insert(n, o.getOrElse(Nil), m.getOrElse(Nil), s)})
 
   // Insertion order can be modified by specifying the columns to put value sinto
   def modInsert: Parser[List[String]] = "(" ~> repsep(ident, ",") <~ ")"
@@ -382,18 +384,19 @@ object AqueryParser extends StandardTokenParsers with PackratParsers {
   // Create statements
   // A table can be created simply by stating the schema, or by a query reuslt
   def create: Parser[Create] =
-    CREATE ~> TABLE ~> ident ~
+    positioned(CREATE ~> TABLE ~> ident ~
       (schema ^^ { Left(_) }
         | fullQuery ^^ { Right(_) }
-        ) ^^ { case n ~ s => Create(n, s) }
+        ) ^^ { case n ~ s => Create(n, s) })
 
   // A table schema consists of column name and type tuples
   def schema: Parser[List[(String, TypeName)]] = "(" ~> rep1sep(schemaEntry, ",") <~ ")"
+
   def schemaEntry: Parser[(String, TypeName)] = ident ~ typeLabel ^^ { case i ~ t => i -> t}
 
   // Types must always be in upper case, see alwaysUpperCase
   def typeLabel: Parser[TypeName] =
-    (INT  ^^^ TypeInt
+    positioned(INT  ^^^ TypeInt
       | FLOAT  ^^^ TypeFloat
       | TIMESTAMP ^^^ TypeTimestamp
       | DATE  ^^^ TypeDate
@@ -403,7 +406,7 @@ object AqueryParser extends StandardTokenParsers with PackratParsers {
 
   // Load/Save statements
   def io: Parser[DataIO] =
-  ( LOAD ~> DATA ~> INFILE ~> stringLit ~
+  positioned( LOAD ~> DATA ~> INFILE ~> stringLit ~
     (INTO ~> TABLE ~> ident) ~
     (FIELDS ~> TERMINATED ~> BY ~> stringLit) ^^ { case f ~ t ~ s => Load(f, t, s)}
   | (fullQuery <~ INTO <~ OUTFILE) ~
@@ -414,9 +417,9 @@ object AqueryParser extends StandardTokenParsers with PackratParsers {
   // UDFs are a series of semi-colon separated local variable assignments or expressions
   // The last expression/assignment corresponds to the overall function value
   def udf: Parser[UDF] =
-    FUNCTION ~> ident ~
+    positioned(FUNCTION ~> ident ~
       ("(" ~> repsep(ident, ",") <~ ")") ~
-      ("{" ~> repsep(udfBody, ";") <~ "}") ^^ { case n ~ a ~ b => UDF(n, a, b) }
+      ("{" ~> repsep(udfBody, ";") <~ "}") ^^ { case n ~ a ~ b => UDF(n, a, b) })
 
   // UDF body: assignments to local vars or expressions
   def udfBody: Parser[Either[Assign, Expr]] =
@@ -425,22 +428,22 @@ object AqueryParser extends StandardTokenParsers with PackratParsers {
       )
 
   // Expressions, productions encode precedence and associativity
-  lazy val expr: PackratParser[Expr] = (
-    (expr <~ "|") ~ and ^^ { case o ~ a => BinExpr(Lor, o, a)}
+  lazy val expr: PackratParser[Expr] = positioned(
+    (expr <~ "|") ~ and ^^ { case o ~ a => BinExpr(Lor, o, a) }
     | and
    )
 
-  lazy val and: PackratParser[Expr] =
-    ( (and <~ "&") ~ eq ^^ { case a ~ e => BinExpr(Land, a, e) }
+  lazy val and: PackratParser[Expr] = positioned(
+      (and <~ "&") ~ eq ^^ { case a ~ e => BinExpr(Land, a, e) }
       | eq
       )
 
-  lazy val eq: PackratParser[Expr] = (
+  lazy val eq: PackratParser[Expr] = positioned(
     eq ~ ("=" | "!=") ~ rel ^^ { case e ~ op ~ r => BinExpr(if(op == "==") Eq else Neq, e, r) }
     |  rel
     )
 
-  lazy val rel: PackratParser[Expr] = (
+  lazy val rel: PackratParser[Expr] = positioned(
     rel ~ ("<=" | ">=" | "<" | ">") ~ add ^^ {
         case r ~ opStr ~ a => BinExpr(opStr match {
           case "<=" => Le
@@ -452,23 +455,23 @@ object AqueryParser extends StandardTokenParsers with PackratParsers {
     | add
     )
 
-  lazy val add: PackratParser[Expr] =
-    (add ~ ("+" | "-") ~ mult ^^ {case a ~ op ~ m => BinExpr(if(op == "+") Plus else Minus, a, m) }
+  lazy val add: PackratParser[Expr] = positioned(
+    add ~ ("+" | "-") ~ mult ^^ {case a ~ op ~ m => BinExpr(if(op == "+") Plus else Minus, a, m) }
     | mult
    )
 
-  lazy val mult: PackratParser[Expr] = (
+  lazy val mult: PackratParser[Expr] = positioned(
     mult ~ ("*" | "/") ~ pow ^^ { case m ~ op ~ p => BinExpr(if(op == "*") Times else Div, m, p) }
     | pow
     )
 
-  def pow: Parser[Expr] = (
+  def pow: Parser[Expr] = positioned(
     (unary <~ "^") ~ pow ^^ { case  u ~ e => BinExpr(Exp, u, e) }
     | unary
     )
 
   def unary: Parser[Expr] =
-    (("!" | "-") ~ baseExp ^^ { case op ~ e => if(op == "!") UnExpr(Not, e) else
+    positioned(("!" | "-") ~ baseExp ^^ { case op ~ e => if(op == "!") UnExpr(Not, e) else
       e match {
         case IntLit(v) => IntLit(-v)
         case FloatLit(v) => FloatLit(-v)
@@ -480,7 +483,7 @@ object AqueryParser extends StandardTokenParsers with PackratParsers {
 
   // index operation
   lazy val indexExpr: PackratParser[ArrayIndex] =
-    baseExp ~ ("[" ~> indexOp <~ "]") ^^ { case a ~ i => ArrayIndex(a, i) }
+    positioned(baseExp ~ ("[" ~> indexOp <~ "]") ^^ { case a ~ i => ArrayIndex(a, i) })
 
   // safe indexing operations
   def indexOp: Parser[IndexOperator] =
@@ -491,17 +494,17 @@ object AqueryParser extends StandardTokenParsers with PackratParsers {
 
   // Case expressions
   def caseExpr: Parser[Case] =
-    CASE ~> expr.? ~ whenThen.+ ~ (ELSE ~> expr).? <~ END ^^ { case c ~ it ~ e  => Case(c, it, e) }
+    positioned(CASE ~> expr.? ~ whenThen.+ ~ (ELSE ~> expr).? <~ END ^^ { case c ~ it ~ e  => Case(c, it, e) })
 
   // when-then expressions, used in case expressions
   def whenThen: Parser[IfThen] =
-    (WHEN ~> expr <~ THEN) ~  expr ^^ { case i ~ t => IfThen(i, t) }
+    positioned(WHEN ~> expr <~ THEN) ~  expr ^^ { case i ~ t => IfThen(i, t) }
 
 
   // function call (handle UDF and built-in separately to avoid conflict with reserved words)
   def funCall: Parser[FunCall] =
-    (ident ~ ("(" ~> repsep(expr, ",") <~ ")") ^^ { case f ~ args => FunCall(f, args) }
-      | builtin ~ ("(" ~> repsep(expr, ",") <~ ")") ^^ { case f ~ args => FunCall(f.str, args) }
+    positioned(ident ~ ("(" ~> repsep(expr, ",") <~ ")") ^^ { case f ~ args => FunCall(f, args) }
+      | builtin ~ ("(" ~> repsep(expr, ",") <~ ")") ^^ { case f ~ args => FunCall(f.str.toUpperCase, args) }
       )
 
   // reflection to get all built-in functions
@@ -516,7 +519,7 @@ object AqueryParser extends StandardTokenParsers with PackratParsers {
 
 
   lazy val baseExp: PackratParser[Expr] =
-    (lit
+    positioned(lit
       | indexExpr
       | "(" ~> expr <~ ")"
       | caseExpr
@@ -528,7 +531,7 @@ object AqueryParser extends StandardTokenParsers with PackratParsers {
 
   // Constants/literals
   def lit: Parser[Lit] =
-    (numericLit ^^ { v => if (v.contains(".")) FloatLit(v.toDouble) else IntLit(v.toLong) }
+    positioned(numericLit ^^ { v => if (v.contains(".")) FloatLit(v.toDouble) else IntLit(v.toLong) }
       | timestamp
       |  date
       |  stringLit ^^ {s => StringLit(s)}
@@ -537,23 +540,23 @@ object AqueryParser extends StandardTokenParsers with PackratParsers {
 
   // Expressions related to a table
   def tableExp: Parser[TableExpr] =
-    (ROWID ^^ { _ => RowId}
+    positioned(ROWID ^^ { _ => RowId}
     | (ident <~ ".") ~ ident ^^ { case t ~ c => ColumnAccess(t, c) }
     | "*" ^^ { _ => WildCard }
     )
 
   def bool: Parser[Lit] =
-    (TRUE ^^ { _ => BooleanLit(true) }
+    positioned(TRUE ^^ { _ => BooleanLit(true) }
       | FALSE ^^ { _ => BooleanLit(false) }
       )
 
   def date: Parser[Lit] =
-    elem("date", _.isInstanceOf[lexical.Date]) ^^ { x => DateLit(x.chars) }
+    positioned(elem("date", _.isInstanceOf[lexical.Date]) ^^ { x => DateLit(x.chars) })
 
   def timestamp: Parser[Lit] =
-    elem("timestamp", _.isInstanceOf[lexical.Timestamp]) ^^ { x => TimestampLit(x.chars) }
+    positioned(elem("timestamp", _.isInstanceOf[lexical.Timestamp]) ^^ { x => TimestampLit(x.chars) })
 
-  def id: Parser[Id] = ident ^^ {n => Id(n)}
+  def id: Parser[Id] = positioned(ident ^^ {n => Id(n)})
 
   /**
    * Parse a string as a given non-terminal
