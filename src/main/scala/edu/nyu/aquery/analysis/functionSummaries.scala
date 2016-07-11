@@ -6,36 +6,30 @@ import AnalysisTypes._
  * Function summaries contain summary information for a given function. We stuck with
  * normal classes here to easily extend with new properties in the future.
  */
-abstract class FunctionSummary {
+sealed abstract class FunctionSummary {
   def f: String
-  def numArgs = argTypes.size
-  def argTypes: Seq[Set[TypeTag]]
-  def returnType: TypeTag
+  def signature: PartialFunction[Seq[TypeTag], TypeTag]
   def orderDependent: Boolean
 }
 
 /**
  * Summary for a built-in function
- * @param f
- * @param argTypes
- * @param returnType
+ * @param f function name
+ * @param signature partial function representing type signature
  * @param orderDependent
  */
 class BuiltInSummary(
   val f: String,
-  val argTypes: Seq[Set[TypeTag]],
-  val returnType: TypeTag = TUnknown,
+  val signature: PartialFunction[Seq[TypeTag], TypeTag],
   val orderDependent: Boolean = false) extends FunctionSummary
 
 /**
  * Summary for an UDF
- * @param f
- * @param argTypes
- * @param returnType
+ * @param f function name
+ * @param signature partial function representing type signature
  * @param orderDependent
  */
 class UDFSummary(
   val f: String,
-  val argTypes: Seq[Set[TypeTag]],
-  val returnType: TypeTag = TUnknown,
+  val signature: PartialFunction[Seq[TypeTag], TypeTag],
   val orderDependent: Boolean = false) extends FunctionSummary

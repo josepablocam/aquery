@@ -6,8 +6,8 @@ import scala.annotation.tailrec
 import scala.io.Source
 
 import edu.nyu.aquery.parse.AqueryParser
-import edu.nyu.aquery.ast.{Dot, TopLevel, UDF}
-import edu.nyu.aquery.analysis.{AnalysisTypes, FunctionInfo, TypeChecker, UDFSummary}
+import edu.nyu.aquery.ast.Dot
+import edu.nyu.aquery.analysis.TypeChecker
 
 /**
  * AQuery executable. Takes various command line arguments.
@@ -85,23 +85,8 @@ object Aquery extends App {
       None
   }
 
-
   // (Soft) Type Checking  ---------------------------------------------------
-  val typeCheck = (prog: Seq[TopLevel]) => {
-    // UDFs are checkd solely for number of args to call
-    val ctFunArgs = (s: FunctionInfo, f: UDF) => {
-      val nArgs = f.args.length
-      val summary = new UDFSummary(f.n, List.fill(nArgs)(AnalysisTypes.unk))
-      // add 2 entries, one with args length, another without
-      s.write(FunctionInfo.asName(f.n, nArgs), summary).write(f.n, summary)
-    }
-    // environment is collected sequentially
-    val env = FunctionInfo(prog.collect { case f: UDF => f }, ctFunArgs)
-    // type check with the current environment
-    TypeChecker(env)(prog)
-  }
-
-  val typeErrors = for (prog <- parsed if config.typeCheck) yield typeCheck(prog)
+  val typeErrors = for (prog <- parsed if config.typeCheck) yield TypeChecker(prog)
 
   typeErrors.foreach { errs =>
     errs.sortBy(e => (e.pos.line, e.pos.column)).foreach(println)
