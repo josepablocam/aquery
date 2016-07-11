@@ -143,6 +143,7 @@ case object Desc extends OrderDirection
 trait JoinType
 case object InnerJoinUsing extends JoinType
 case object FullOuterJoinUsing extends JoinType
+case object InnerJoinOn extends JoinType
 case object Cross extends JoinType
 
 
@@ -154,7 +155,7 @@ case object Cross extends JoinType
  */
 case class Table(
   n: String,
-  alias: Option[String],
+  alias: Option[String] = None,
   attr: Map[Any, Any] = Map()) extends RelAlg {
   val children: Seq[RelAlg] = Nil
   val expr: Seq[Expr] = Nil
