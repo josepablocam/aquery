@@ -117,8 +117,8 @@ class TypeChecker(info: FunctionInfo) {
       // first condition defines type of branches
       val (elseType, whenErrors) = when match {
         // go ahead with unknown type tag, and report missing as error
+        // note that this conditions should actually never take place, as restricted by parse
         case Nil => (TUnknown, List(err(TBoolean, TUnit, c)))
-        case x :: Nil => checkExpr(x.t)
         case x :: xs =>
           val (thenType, errs) = checkExpr(x.t)
           val moreErrs = xs.flatMap(checkTypeTag(Set(thenType), _))
@@ -255,16 +255,15 @@ class TypeChecker(info: FunctionInfo) {
 }
 
 object TypeChecker {
-  def apply(prog: Seq[TopLevel]): Seq[AnalysisError] = {
+  def apply(prog: Seq[TopLevel]): TypeChecker = {
     // UDFs are checked solely for number of args to call
     val ctFunArgs = (s: FunctionInfo, f: UDF) => {
       s.write(f.n, new UDFSummary(f.n, { case x if x.length == f.args.length => TUnknown }))
     }
     // environment is collected sequentially
     val env = FunctionInfo(prog.collect { case f: UDF => f }, ctFunArgs)
-    // type check with the current environment
-    val checker = new TypeChecker(env)
-    checker.typeCheck(prog)
+    // create type checker with the current environment
+   new TypeChecker(env)
   }
 
   def apply(): TypeChecker = new TypeChecker(FunctionInfo.unit())
