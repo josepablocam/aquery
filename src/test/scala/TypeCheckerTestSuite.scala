@@ -94,9 +94,9 @@ class TypeCheckerTestSuite extends FunSuite {
   // which are collected in a first pass that creates the type checker
   // UDF definitions check the body for errors
   test("udf") {
-    val f = parse(udf, "FUNCTION f(x, y) {}").get
-    val g = parse(udf, "FUNCTION g(x) {}").get
-    val h = parse(udf, "FUNCTION h() {}").get
+    val f = parse(udf, "FUNCTION f(x, y) {2}").get
+    val g = parse(udf, "FUNCTION g(x) {2}").get
+    val h = parse(udf, "FUNCTION h() {2}").get
     val goodCalls = List("f(1, 2)", "g(1)", "h()").map(parse(expr, _).get)
     val badCalls = List("f(1, 2, 3)", "g()", "h(1)").map(parse(expr, _).get)
 

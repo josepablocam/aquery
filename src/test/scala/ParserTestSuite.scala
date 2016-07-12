@@ -154,8 +154,8 @@ class ParserTestSuite extends FunSuite {
   // udfs
   test("udf") {
     // positive tests
-    assert(expectParse(udf, "FUNCTION f(){}")(Some(UDF("f", Nil, Nil) == _)), "empty function")
-    assert(expectParse(udf, "FUNCTION g(x, y){}")(Some(UDF("g", List("x","y"), Nil) == _)), "with args")
+    assert(expectParse(udf, "FUNCTION f(){2}")(Some(UDF("f", Nil, List(Right(2))) == _)), "empty function")
+    assert(expectParse(udf, "FUNCTION g(x, y){2}")(Some(UDF("g", List("x","y"), List(Right(2))) == _)), "with args")
     assert(expectParse(udf, "FUNCTION f(x){ a := 10; a * 100 }")
       (Some(UDF("f", List("x"), Left(Assign("a", 10)) :: Right(times('a', 100)) :: Nil) == _)),
       "full function"
