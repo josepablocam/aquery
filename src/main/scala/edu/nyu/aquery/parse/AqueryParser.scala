@@ -419,7 +419,7 @@ object AqueryParser extends StandardTokenParsers with PackratParsers {
   def udf: Parser[UDF] =
     positioned(FUNCTION ~> ident ~
       ("(" ~> repsep(ident, ",") <~ ")") ~
-      ("{" ~> repsep(udfBody, ";") <~ "}") ^^ { case n ~ a ~ b => UDF(n, a, b) })
+      ("{" ~> rep1sep(udfBody, ";") <~ "}") ^^ { case n ~ a ~ b => UDF(n, a, b) })
 
   // UDF body: assignments to local vars or expressions
   def udfBody: Parser[Either[Assign, Expr]] =
