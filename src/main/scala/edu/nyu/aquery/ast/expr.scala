@@ -10,7 +10,6 @@ trait Expr extends AST[Expr] {
 
   /**
    * Sequence of all subexpressions (including self) in an expression
-<<<<<<< HEAD
    * @return
    */
   lazy val allSubExpressions: Seq[Expr] = {
