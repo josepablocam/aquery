@@ -10,9 +10,10 @@ trait Expr extends AST[Expr] {
 
   /**
    * Sequence of all subexpressions (including self) in an expression
+<<<<<<< HEAD
    * @return
    */
-  def allSubExpressions: Seq[Expr] = {
+  lazy val allSubExpressions: Seq[Expr] = {
     @tailrec
     def loop(exprs: Seq[Expr], acc: Seq[Expr]): Seq[Expr] = exprs match {
       case Nil => acc
@@ -210,7 +211,8 @@ case class IfThen(c: Expr, t: Expr) extends Expr {
 }
 // CASE .... END
 case class Case(cond: Option[Expr], when: List[IfThen], e: Option[Expr]) extends ControlFlowExpr {
-  def children = cond.map(List(_)).getOrElse(Nil) ++ when ++ cond.map(List(_)).getOrElse(Nil)
+  def children =
+    cond.map(List(_)).getOrElse(Nil) ++ when ++ e.map(List(_)).getOrElse(Nil)
 
   def dotify(currAvail: Int) = {
     val selfNode = Dot.declareNode(currAvail, "case")
