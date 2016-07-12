@@ -42,20 +42,20 @@ object FunctionInfo {
 
   val normal = Set(
     new BuiltInSummary("ABS", num_Num, false),
-    new BuiltInSummary("AVG", boolOrNum_Num, false),
-    new BuiltInSummary("COUNT", { case x :: Nil => TNumeric }, false),
+    new BuiltInSummary("AVG", boolOrNum_Num, false, true),
+    new BuiltInSummary("COUNT", { case x :: Nil => TNumeric }, false, true),
     new BuiltInSummary("FILL", selfAndSelf_Self, false),
     new BuiltInSummary("IN", { case x :: xs if xs.forall(_.consistent(Set(x))) => TBoolean }, false),
     new BuiltInSummary("LIKE", selfAndSelf_Bool, false),
     new BuiltInSummary("BETWEEN", { case xs if xs.forall(_.consistent(num)) => TBoolean }, false),
-    new BuiltInSummary("MAX", { case v @ x :: xs if v.forall(_.consistent(numAndBool)) => x }, false),
-    new BuiltInSummary("MIN", { case v @ x :: xs if v.forall(_.consistent(numAndBool)) => x }, false),
+    new BuiltInSummary("MAX", { case v @ x :: xs if v.forall(_.consistent(numAndBool)) => x }, false, true),
+    new BuiltInSummary("MIN", { case v @ x :: xs if v.forall(_.consistent(numAndBool)) => x }, false, true),
     new BuiltInSummary("NOT", bool_Bool, false),
     new BuiltInSummary("NULL", { case x :: Nil  => TBoolean }, false),
     new BuiltInSummary("OR", { case v @ x :: y :: xs if v.forall(_.consistent(bool)) => TBoolean }, false),
-    new BuiltInSummary("PRD", boolOrNum_Num, false),
+    new BuiltInSummary("PRD", boolOrNum_Num, false, true),
     new BuiltInSummary("SQRT", num_Num, false),
-    new BuiltInSummary("SUM",  num_Num orElse bool_Num, false)
+    new BuiltInSummary("SUM",  num_Num orElse bool_Num, false, true)
   )
 
   val orderDependent = Set(
@@ -83,6 +83,10 @@ object FunctionInfo {
    */
   def unit(): FunctionInfo = new FunctionInfo(defaultInfo)
 
-  def apply(funs: Seq[UDF], summarize: (FunctionInfo, UDF) => FunctionInfo) =
-    funs.foldLeft(unit())((info, f) => summarize(info, f))
+  def apply(funs: Seq[UDF], summarize: (FunctionInfo, UDF) => FunctionInfo): FunctionInfo =
+    this(unit(), funs, summarize)
+
+  def apply(init: FunctionInfo, funs: Seq[UDF], summarize: (FunctionInfo, UDF) => FunctionInfo)
+  : FunctionInfo =
+    funs.foldLeft(init)((info, f) => summarize(info, f))
 }
