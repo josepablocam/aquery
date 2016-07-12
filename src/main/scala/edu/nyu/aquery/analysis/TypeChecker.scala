@@ -266,5 +266,5 @@ object TypeChecker {
    new TypeChecker(env)
   }
 
-  def apply(): TypeChecker = new TypeChecker(FunctionInfo.unit())
+  def apply(): TypeChecker = apply(Nil)
 }
