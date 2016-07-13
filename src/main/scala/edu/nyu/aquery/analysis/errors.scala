@@ -75,3 +75,8 @@ case class UnknownCorrName(ca: String, pos: Position) extends AnalysisError {
   override def toString =
     "Table Error: Unknown correlation name in " + ca + " at " + loc()
 }
+
+case class AmbigColAccess(ca: String, pos: Position) extends AnalysisError {
+  override def toString =
+    "Table Error: Ambiguous column access in " + ca + " at " + loc()
+}

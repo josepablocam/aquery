@@ -152,6 +152,16 @@ class TypeCheckerTestSuite extends FunSuite {
       "SELECT bad.c1, some_t.c2 * st.ok, f(bad2.c2 * 2) FROM some_t st"
     ).get
     assert(simpleChecker.checkQuery(badColAccess).length === 2, "bad col access")
+
+    val ambigColAccess = parse(fullQuery,
+      "SELECT t.c1 * t.c2 FROM t as first_t, t second_t"
+    ).get
+    assert(simpleChecker.checkQuery(ambigColAccess).nonEmpty, "ambig col access")
+
+    val nonAmbigColAccess = parse(fullQuery,
+      "SELECT first_t.c1 * second_t.c2 FROM t as first_t, t second_t"
+    ).get
+    assert(simpleChecker.checkQuery(nonAmbigColAccess) === List(), "non-ambig col access")
   }
 
   // just do update, delete is effectively the same type checking

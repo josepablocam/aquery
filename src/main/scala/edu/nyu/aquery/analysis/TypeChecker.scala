@@ -210,8 +210,17 @@ class TypeChecker(info: FunctionInfo) {
     case _ => e.children.flatMap(allColAccesses).toSet
   }
 
-  def checkColAccesses(tables: Set[String], cas: Set[ColumnAccess]): Seq[AnalysisError] =
-    cas.collect { case ca if !tables.contains(ca.t) => UnknownCorrName(ca.t + "." + ca.c, ca.pos) }.toSeq
+  def checkColAccesses(tables: Seq[String], cas: Set[ColumnAccess]): Seq[AnalysisError] = {
+    // count times each table name appears
+    val countByName = tables.groupBy(identity).mapValues(_.size)
+    // remove any table names that might be ambiguous
+    val ambigTables = tables.filter(countByName(_) > 1)
+    // check column access based on unique table names
+    cas.collect {
+      case ca if ambigTables.contains(ca.t) => AmbigColAccess(ca.t + "." + ca.c, ca.pos)
+      case ca if !tables.contains(ca.t) => UnknownCorrName(ca.t + "." + ca.c, ca.pos)
+    }.toSeq
+  }
 
   /**
    * Type check a query. Checks expressions (along with necessary constraints on the expressions).
@@ -238,7 +247,7 @@ class TypeChecker(info: FunctionInfo) {
     val dupCorrErrors = checkDuplicates(tables.filter(_.alias.isDefined), _.alias)
     // check table names for duplications (note that same table name, diff corr name is not a dupe)
     val dupTableErrors = checkDuplicates(tables, identity)
-    val tableNames = tables.flatMap(t => Set(t.n) ++ t.alias).toSet
+    val tableNames = tables.flatMap(t => Set(t.n) ++ t.alias)
     val unkCorrErrors = checkColAccesses(tableNames, allColAccesses(r))
     exprErrors ++ dupCorrErrors ++ dupTableErrors ++ unkCorrErrors
   }
@@ -264,7 +273,7 @@ class TypeChecker(info: FunctionInfo) {
         w.flatMap(c => checkTypeTag(bool, c)) ++
         g.flatMap(c => checkExpr(c)._2) ++
         h.flatMap(c => checkTypeTag(bool, c)) ++
-        checkColAccesses(Set(t), q.expr.flatMap(allColAccesses).toSet)
+        checkColAccesses(List(t), q.expr.flatMap(allColAccesses).toSet)
     case Delete(t, del, _, g, h) =>
       (del match {
         case Right(w) => w.flatMap(c => checkTypeTag(bool, c))
@@ -272,7 +281,7 @@ class TypeChecker(info: FunctionInfo) {
       }) ++
         g.flatMap(c => checkExpr(c)._2) ++
         h.flatMap(c => checkTypeTag(bool, c)) ++
-        checkColAccesses(Set(t), q.expr.flatMap(allColAccesses).toSet)
+        checkColAccesses(List(t), q.expr.flatMap(allColAccesses).toSet)
   }
 
   /**
