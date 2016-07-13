@@ -308,6 +308,7 @@ trait ModificationQuery extends AST[ModificationQuery] with TopLevel {
   def dotify(currAvail: Int) = ModificationQuery.dotify(this, currAvail)
   // We don' optimize updates/deletes
   def transform(f: PartialFunction[ModificationQuery, ModificationQuery]) = this
+  def expr: Seq[Expr]
 }
 
 /**
@@ -325,7 +326,9 @@ case class Update(
   order: List[(OrderDirection, String)],
   where: List[Expr],
   groupby: List[Expr],
-  having: List[Expr]) extends ModificationQuery
+  having: List[Expr]) extends ModificationQuery {
+  val expr = assigns.map(_._2) ++ where ++ groupby ++ having
+}
 
 /**
  * Delete statements
@@ -340,7 +343,9 @@ case class Delete(
   del: Either[List[String], List[Expr]],
   order: List[(OrderDirection, String)],
   groupby: List[Expr],
-  having: List[Expr]) extends ModificationQuery
+  having: List[Expr]) extends ModificationQuery {
+  val expr = (del match { case Left(_) => Nil; case Right(es) => es}) ++ groupby ++ having
+}
 
 object ModificationQuery {
   def dotify(o: ModificationQuery, currAvail: Int) = {

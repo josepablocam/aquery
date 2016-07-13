@@ -13,7 +13,7 @@ sealed abstract class AnalysisError {
    * @return
    */
   def pos: Position
-  def loc = "[" + pos.line + "," + pos.column + "]"
+  def loc(p: Position = pos) = "[" + p.line + "," + p.column + "]"
 
 }
 
@@ -25,7 +25,7 @@ sealed abstract class AnalysisError {
  */
 case class TypeError(expected: TypeTag, found: TypeTag, pos: Position) extends AnalysisError {
   override def toString =
-    "Type Error: expected " + expected + " found " + found + " at " + loc
+    "Type Error: expected " + expected + " found " + found + " at " + loc()
 }
 
 /**
@@ -38,7 +38,7 @@ case class TypeError(expected: TypeTag, found: TypeTag, pos: Position) extends A
  */
 case class BadCall(f: String, pos: Position) extends AnalysisError {
   override def toString =
-    "Call Error: bad call to " + f + " at " + loc
+    "Call Error: bad call to " + f + " at " + loc()
 
 }
 
@@ -50,8 +50,28 @@ case class BadCall(f: String, pos: Position) extends AnalysisError {
  * @param pos
  */
 case class NumArgsError(f: String, expected: Int, found: Int, pos: Position) extends AnalysisError {
-  override def toString = {
-    val loc = "[" + pos.line + "," + pos.column + "]"
-    "Call Error: expected " + expected + " args for " + f + " found " + found + " at " + loc
-  }
+  override def toString =
+    "Call Error: expected " + expected + " args for " + f + " found " + found + " at " + loc()
+}
+
+/**
+ * A table (name, correlation name, or both) is duplicated
+ * @param t1 first table name
+ * @param t2 second table name
+ * @param pos position of either error
+ */
+case class DuplicateTableName(t1: String, t2: String, pos: Position, pos2: Position)
+  extends AnalysisError {
+  override def toString =
+    "Table Error: Duplicate table " + t1 + " at " + loc(pos) + " and " + t2 + " at " + loc(pos2)
+}
+
+/**
+ * Unknown table/correlation name used in a query body in a column access (i.e. t.c)
+ * @param ca column access
+ * @param pos position of reference
+ */
+case class UnknownCorrName(ca: String, pos: Position) extends AnalysisError {
+  override def toString =
+    "Table Error: Unknown correlation name in " + ca + " at " + loc()
 }

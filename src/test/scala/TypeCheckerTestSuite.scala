@@ -135,6 +135,31 @@ class TypeCheckerTestSuite extends FunSuite {
       """
     ).get
     assert(simpleChecker.checkQuery(badLocal).nonEmpty, "bad local query")
+
+    // correlation names etc
+    val dupeTables = parse(fullQuery, "SELECT * FROM t1, t2 INNER JOIN t1 USING c1").get
+    assert(simpleChecker.checkQuery(dupeTables).nonEmpty, "duplicate tables")
+
+    val dupeCorrNames = parse(fullQuery, "SELECT * FROM t1, t2 bad, t3 as bad").get
+    assert(simpleChecker.checkQuery(dupeCorrNames).nonEmpty, "duplicate alias")
+
+    val okTables = parse(fullQuery,
+      "SELECT * FROM t1 as firstT1, t2 INNER JOIN t2 other_t2 USING cx"
+    ).get
+    assert(simpleChecker.checkQuery(okTables) === List())
+
+    val badColAccess = parse(fullQuery,
+      "SELECT bad.c1, some_t.c2 * st.ok, f(bad2.c2 * 2) FROM some_t st"
+    ).get
+    assert(simpleChecker.checkQuery(badColAccess).length === 2, "bad col access")
+  }
+
+  // just do update, delete is effectively the same type checking
+  test("modification queries") {
+    val badUpdate = parse(update, "UPDATE t SET c1 = bad.c2 * 3 WHERE c1 > 2").get
+    assert(simpleChecker.checkModificationQuery(badUpdate).nonEmpty, "bad col access")
+    val okUpdate = parse(update, "UPDATE t SET c1 = f(t.c1) ASSUMING ASC c2 WHERE sums(c1 > 2) > 2").get
+    assert(simpleChecker.checkModificationQuery(okUpdate) === List())
   }
 
   // full programs

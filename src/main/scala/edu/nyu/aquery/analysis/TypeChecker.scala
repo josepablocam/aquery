@@ -163,12 +163,12 @@ class TypeChecker(info: FunctionInfo) {
   }
 
   /**
-   * Recursively type check a relational algebra operator and its arguments.
-   * Filter and having must be boolean expressions, similarly for conditions ina join
+   * Recursively type check expressions in a relational algebra operator and its arguments.
+   * Filter and having must be boolean expressions, similarly for conditions in a join.
    * @param r
    * @return
    */
-  def checkRelAlg(r: RelAlg): Seq[AnalysisError] = {
+  def checkExprInRelAlg(r: RelAlg): Seq[AnalysisError] = {
     val selfErrors = r match {
       case Filter(_, fs, _) => r.expr.flatMap(checkTypeTag(bool, _))
       case GroupBy(_, _, having, _) =>
@@ -178,8 +178,71 @@ class TypeChecker(info: FunctionInfo) {
       case _ => r.expr.flatMap(checkExpr(_)._2)
     }
     // recursively check
-    selfErrors ++ r.children.flatMap(checkRelAlg)
+    selfErrors ++ r.children.flatMap(checkExprInRelAlg)
   }
+
+  /**
+   * Get all tables available in a query
+   * @param r
+   * @return
+   */
+  def allTablesInQuery(r: RelAlg): Seq[Table] = r match {
+    case t @ Table(_, _, _) => List(t)
+    case _ => r.children.flatMap(allTablesInQuery)
+  }
+
+  /**
+   * Get all distinct column accesses (e.g. t.c) in a relational algebra operation
+   * @param r
+   * @return
+   */
+  def allColAccesses(r: RelAlg): Set[ColumnAccess] = {
+    (r +: r.children).flatMap(_.expr.flatMap(allColAccesses)).toSet
+  }
+
+  /**
+   * Get all distinct column accesses (e.g. t.c) in an expression
+   * @param e
+   * @return
+   */
+  def allColAccesses(e: Expr): Set[ColumnAccess] = e match {
+    case c @ ColumnAccess(_, _) => Set(c)
+    case _ => e.children.flatMap(allColAccesses).toSet
+  }
+
+  def checkColAccesses(tables: Set[String], cas: Set[ColumnAccess]): Seq[AnalysisError] =
+    cas.collect { case ca if !tables.contains(ca.t) => UnknownCorrName(ca.t + "." + ca.c, ca.pos) }.toSeq
+
+  /**
+   * Type check a query. Checks expressions (along with necessary constraints on the expressions).
+   * Checks that table names are unique (or disambiguated with correlation names).
+   * Checks that all column accesses of the form t.c refer to tables available in the query
+   * @param r
+   * @return
+   */
+  def checkRelAlg(r: RelAlg): Seq[AnalysisError] = {
+    // get full name of a table
+    def fullName(t: Table): String = t.alias.map(a => t.n + " as " + a).getOrElse(t.n)
+    // check a sequence of tables for duplicates when grouping along a given dimension
+    def checkDuplicates[A](ts: Seq[Table], grp: Table => A): Seq[AnalysisError] = {
+      // take first 2 duplicates in each key
+      val dupes = ts.groupBy(grp).values.toList.collect { case x if x.length > 1 => x.take(2) }
+      // map all duplicates to errors
+      dupes.map { case Seq(t1, t2) => DuplicateTableName(fullName(t1), fullName(t2), t1.pos, t2.pos) }
+    }
+    // errors stemming from expressions
+    val exprErrors = checkExprInRelAlg(r)
+    // all tables available in the query
+    val tables = allTablesInQuery(r)
+    // check correlation names for duplication
+    val dupCorrErrors = checkDuplicates(tables.filter(_.alias.isDefined), _.alias)
+    // check table names for duplications (note that same table name, diff corr name is not a dupe)
+    val dupTableErrors = checkDuplicates(tables, identity)
+    val tableNames = tables.flatMap(t => Set(t.n) ++ t.alias).toSet
+    val unkCorrErrors = checkColAccesses(tableNames, allColAccesses(r))
+    exprErrors ++ dupCorrErrors ++ dupTableErrors ++ unkCorrErrors
+  }
+
 
   /**
    * Check local queries and the main query in a full query construct
@@ -191,23 +254,25 @@ class TypeChecker(info: FunctionInfo) {
 
   /**
    * Check update and delete. Imposes similar restrictions on where and having clauses as
-   * checkRelAlg
+   * checkRelAlg. Also checks column accesses to make sure refer to appropriate table name.
    * @param q
    * @return
    */
   def checkModificationQuery(q: ModificationQuery): Seq[AnalysisError] = q match {
-    case Update(_, u, _, w, g, h) =>
+    case Update(t, u, _, w, g, h) =>
       u.flatMap(c => checkExpr(c._2)._2) ++
         w.flatMap(c => checkTypeTag(bool, c)) ++
         g.flatMap(c => checkExpr(c)._2) ++
-        h.flatMap(c => checkTypeTag(bool, c))
-    case Delete(_, del, _, g, h) =>
+        h.flatMap(c => checkTypeTag(bool, c)) ++
+        checkColAccesses(Set(t), q.expr.flatMap(allColAccesses).toSet)
+    case Delete(t, del, _, g, h) =>
       (del match {
         case Right(w) => w.flatMap(c => checkTypeTag(bool, c))
         case _ => Nil
       }) ++
         g.flatMap(c => checkExpr(c)._2) ++
-        h.flatMap(c => checkTypeTag(bool, c))
+        h.flatMap(c => checkTypeTag(bool, c)) ++
+        checkColAccesses(Set(t), q.expr.flatMap(allColAccesses).toSet)
   }
 
   /**
