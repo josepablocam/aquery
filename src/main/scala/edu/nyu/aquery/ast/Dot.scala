@@ -56,4 +56,11 @@ object Dot {
 
     "digraph G {\n" + entryNode + dotGraph + "}\n"
   }
+
+  /**
+   * DOT graphviz format representation of a single relational algebra-based query
+   * @param q
+   * @return
+   */
+  def toGraph(q: RelAlg): String = toGraph(Query(Nil, q) :: Nil)
 }
