@@ -5,7 +5,8 @@ package edu.nyu.aquery.ast
  * mapping to any possible attributes that an analyzer might need/use. We encode this as a map to
  * allow extension with attributes that might not be currently considered.
  */
-trait Analyzable {
+trait Analyzable[T <: Analyzable[T]] {
+  self: T =>
   /**
    * Contains properties assigned/used by analyzer
    */
@@ -16,18 +17,19 @@ trait Analyzable {
    * @param k key
    * @param v value
    */
-  def setAttr(k: Any, v: Any)
+  def setAttr(k: Any, v: Any): T
 }
 
 /**
  * All optimizable query componentats are from relation algebra and they are allowed
  * as top-level constructs in AQuery
  */
-trait RelAlg extends AST[RelAlg] with Analyzable with TopLevel {
+trait RelAlg extends AST[RelAlg] with Analyzable[RelAlg] with TopLevel {
   def expr: Seq[Expr]
   def children: Seq[RelAlg]
   def dotify(currAvail: Int): (String, Int) = RelAlg.dotify(this, currAvail)
   def transform(f: PartialFunction[RelAlg, RelAlg]) = RelAlg.transform(this, f)
+  def setAttr(k: Any, v: Any): RelAlg
 }
 
 /**
@@ -40,7 +42,7 @@ trait RelAlg extends AST[RelAlg] with Analyzable with TopLevel {
 case class Query(
   local: List[(String, List[String], RelAlg)],
   main: RelAlg,
-  attr: Map[Any, Any] = Map()) extends AST[Query] with Analyzable with TopLevel {
+  attr: Map[Any, Any] = Map()) extends AST[Query] with Analyzable[Query] with TopLevel {
   def setAttr(k: Any, v: Any) = this.copy(attr = attr.updated(k, v))
 
   def dotify(currAvail: Int) = {
