@@ -175,10 +175,24 @@ class TypeChecker(info: FunctionInfo) {
         // note that we check having twice, just for simplicity of code
         having.flatMap(checkTypeTag(bool, _)) ++ r.expr.flatMap(checkExpr(_)._2)
       case _: Join => r.expr.flatMap(checkTypeTag(bool, _))
+      case SortBy(_, _, _) => checkSortExpr(r.expr)
       case _ => r.expr.flatMap(checkExpr(_)._2)
     }
     // recursively check
     selfErrors ++ r.children.flatMap(checkExprInRelAlg)
+  }
+
+  /**
+   * Check that the expression used as sorting only correspond to simple columns and accesses
+   * of the form t.c1
+   * @param s
+   * @return
+   */
+  def checkSortExpr(s: Seq[Expr]): Seq[AnalysisError] = {
+    s.collect {
+      case x if !x.isInstanceOf[Id] && !x.isInstanceOf[ColumnAccess] =>
+        IllegalSort(x.dotify(1)._1, x.pos)
+    }
   }
 
   /**
@@ -268,17 +282,19 @@ class TypeChecker(info: FunctionInfo) {
    * @return
    */
   def checkModificationQuery(q: ModificationQuery): Seq[AnalysisError] = q match {
-    case Update(t, u, _, w, g, h) =>
+    case Update(t, u, o, w, g, h) =>
       u.flatMap(c => checkExpr(c._2)._2) ++
+        checkSortExpr(o.map(_._2)) ++
         w.flatMap(c => checkTypeTag(bool, c)) ++
         g.flatMap(c => checkExpr(c)._2) ++
         h.flatMap(c => checkTypeTag(bool, c)) ++
         checkColAccesses(List(t), q.expr.flatMap(allColAccesses).toSet)
-    case Delete(t, del, _, g, h) =>
+    case Delete(t, del, o, g, h) =>
       (del match {
         case Right(w) => w.flatMap(c => checkTypeTag(bool, c))
         case _ => Nil
       }) ++
+        checkSortExpr(o.map(_._2)) ++
         g.flatMap(c => checkExpr(c)._2) ++
         h.flatMap(c => checkTypeTag(bool, c)) ++
         checkColAccesses(List(t), q.expr.flatMap(allColAccesses).toSet)
@@ -294,8 +310,8 @@ class TypeChecker(info: FunctionInfo) {
    */
   def checkTableModification(m: TableModification): Seq[AnalysisError] = m match {
     case Create(_, Right(q)) => checkQuery(q)
-    case Insert(_, _, _, Left(e)) => e.flatMap(checkExpr(_)._2)
-    case Insert(_, _, _, Right(q)) => checkQuery(q)
+    case Insert(_, o, _, Left(e)) => e.flatMap(checkExpr(_)._2) ++ checkSortExpr(o.map(_._2))
+    case Insert(_, o, _, Right(q)) => checkQuery(q) ++ checkSortExpr(o.map(_._2))
     case _ => Nil
   }
 

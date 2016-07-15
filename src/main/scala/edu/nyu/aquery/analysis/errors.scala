@@ -76,7 +76,24 @@ case class UnknownCorrName(ca: String, pos: Position) extends AnalysisError {
     "Table Error: Unknown correlation name in " + ca + " at " + loc()
 }
 
+/**
+ * Ambiguous column access used in an expression
+ * e.g select t.c1 from t t1, t t2
+ * @param ca
+ * @param pos
+ */
 case class AmbigColAccess(ca: String, pos: Position) extends AnalysisError {
   override def toString =
     "Table Error: Ambiguous column access in " + ca + " at " + loc()
+}
+
+/**
+ * Illegal expression used as sort column. For now, we only allow normal column (Id(_)) or
+ * a column access such as t.c1
+ * @param s
+ * @param pos
+ */
+case class IllegalSort(s: String, pos: Position) extends AnalysisError {
+  override def toString =
+    "Sort Error: Illegal expression for sort in " + s + " at " + loc()
 }

@@ -162,6 +162,12 @@ class TypeCheckerTestSuite extends FunSuite {
       "SELECT first_t.c1 * second_t.c2 FROM t as first_t, t second_t"
     ).get
     assert(simpleChecker.checkQuery(nonAmbigColAccess) === List(), "non-ambig col access")
+
+    val badSort = parse(fullQuery, "SELECT * FROM t ASSUMING ASC c2 * 2").get
+    assert(simpleChecker.checkQuery(badSort).nonEmpty, "bad sorting spec")
+
+    val okSort = parse(fullQuery, "SELECT * FROM t ASSUMING ASC c2, DESC t.c2").get
+    assert(simpleChecker.checkQuery(okSort) === List())
   }
 
   // just do update, delete is effectively the same type checking
