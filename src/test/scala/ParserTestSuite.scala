@@ -116,7 +116,7 @@ class ParserTestSuite extends FunSuite {
     val uE = Update(
       "t",
       ("c1", IntLit(10)) :: Nil,
-      (Asc, "c") :: Nil,
+      (Asc, Id("c")) :: Nil,
       gt('a', 10) :: Nil,
       'h' :: Nil,
       gt(FunCall("SUMS", 'a' :: Nil), 10) :: Nil
@@ -136,7 +136,7 @@ class ParserTestSuite extends FunSuite {
     val dRE = Delete(
       "t",
       Right(gt(FunCall("SUMS", 'c' :: Nil), 100) :: Nil),
-      (Asc, "c1") :: Nil,
+      (Asc, Id("c1")) :: Nil,
       'a' :: Nil,
       gt(FunCall("MAX", 'd' :: Nil), 20) :: Nil
     )
@@ -205,7 +205,7 @@ class ParserTestSuite extends FunSuite {
       GROUP BY c * 10 as ced HAVING count(d) > 10
     """
     val p1 = Project(_: RelAlg, List((FunCall("SUM", 'a' :: Nil), Some("sumA"))))
-    val s1 = SortBy(_: RelAlg, (Asc, "c1") :: (Asc, "c2") :: Nil)
+    val s1 = SortBy(_: RelAlg, (Asc, Id("c1")) :: (Asc, Id("c2")) :: Nil)
     val g1 = GroupBy(_: RelAlg, List((times('c', 10), Some("ced"))), List(gt(FunCall("COUNT", 'd' :: Nil), 10)))
     val w1 = Filter(_: RelAlg, List(gt('a', 100), lt('b', 20)))
 

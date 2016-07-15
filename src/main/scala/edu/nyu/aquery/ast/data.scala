@@ -44,7 +44,7 @@ case class Create(
  */
 case class Insert(
   n: String,
-  order: List[(OrderDirection, String)],
+  order: List[(OrderDirection, Expr)],
   modifier: List[String],
   src: Either[List[Expr], Query]) extends TableModification {
   def dotify(currAvail: Int) = {

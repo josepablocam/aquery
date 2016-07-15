@@ -268,13 +268,12 @@ object AqueryParser extends StandardTokenParsers with PackratParsers {
      positioned(funCall ^^ { case FunCall(f, args) => BottomApply(f, args) })
 
   // Order-clause, tuples of direction and column
-  def order: Parser[List[(OrderDirection, String)]] = rep1sep(orderPair, ",")
+  def order: Parser[List[(OrderDirection, Expr)]] = rep1sep(orderPair, ",")
   // tuples of order, note that the column can be table.columns
-  def orderPair: Parser[(OrderDirection, String)] =
-    (ASC| DESC) ~ ident ~ ("." ~> ident).? ^^ { case d ~ id ~ idop =>
-        val col = idop.map(c => id + "." + c).getOrElse(id)
+  def orderPair: Parser[(OrderDirection, Expr)] =
+    (ASC| DESC) ~ expr  ^^ { case d ~ e =>
         val dir = if (d == ASC) Asc else Desc
-        dir -> col
+        dir -> e
     }
 
   // Where clause is an "AND" separated list of predicates or expressions

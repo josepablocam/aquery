@@ -128,10 +128,10 @@ case class GroupBy(
  */
 case class SortBy(
   t: RelAlg,
-  os: List[(OrderDirection, String)],
+  os: List[(OrderDirection, Expr)],
   attr: Map[Any, Any] = Map()) extends RelAlg {
   val children = List(t)
-  val expr: Seq[Expr] = Nil
+  val expr: Seq[Expr] = os.map(_._2)
   def setAttr(k: Any, v: Any) = this.copy(attr = attr.updated(k, v))
 }
 
@@ -250,7 +250,7 @@ object RelAlg {
       (groupNode + sourceEdge + sourceNode, nextAvail)
     }
     case SortBy(t, os, _) => {
-      val sortLabel = "sort: " + os.map(x => x._1 + " " + x._2).mkString(", ")
+      val sortLabel = "sort: " + os.map(x => x._1 + " " + x._2.dotify(1)._1).mkString(", ")
       val sortNode = Dot.declareNode(currAvail, sortLabel)
       val sourceEdge = Dot.declareEdge(currAvail, currAvail + 1)
       val (sourceNode, nextAvail) = t.dotify(currAvail + 1)
@@ -325,11 +325,11 @@ trait ModificationQuery extends AST[ModificationQuery] with TopLevel {
 case class Update(
   t: String,
   assigns: List[(String, Expr)],
-  order: List[(OrderDirection, String)],
+  order: List[(OrderDirection, Expr)],
   where: List[Expr],
   groupby: List[Expr],
   having: List[Expr]) extends ModificationQuery {
-  val expr = assigns.map(_._2) ++ where ++ groupby ++ having
+  val expr = assigns.map(_._2) ++ order.map(_._2) ++ where ++ groupby ++ having
 }
 
 /**
@@ -343,10 +343,11 @@ case class Update(
 case class Delete(
   t: String,
   del: Either[List[String], List[Expr]],
-  order: List[(OrderDirection, String)],
+  order: List[(OrderDirection, Expr)],
   groupby: List[Expr],
   having: List[Expr]) extends ModificationQuery {
-  val expr = (del match { case Left(_) => Nil; case Right(es) => es}) ++ groupby ++ having
+  val expr =
+    (del match { case Left(_) => Nil; case Right(es) => es}) ++ order.map(_._2) ++ groupby ++ having
 }
 
 object ModificationQuery {
