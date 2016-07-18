@@ -149,7 +149,7 @@ class TypeCheckerTestSuite extends FunSuite {
     assert(simpleChecker.checkQuery(okTables) === List())
 
     val badColAccess = parse(fullQuery,
-      "SELECT bad.c1, some_t.c2 * st.ok, f(bad2.c2 * 2) FROM some_t st"
+      "SELECT bad.c1, some_t.c2 * st.ok, f(c3 * 2) FROM some_t st"
     ).get
     assert(simpleChecker.checkQuery(badColAccess).length === 2, "bad col access")
 
@@ -157,6 +157,11 @@ class TypeCheckerTestSuite extends FunSuite {
       "SELECT t.c1 * t.c2 FROM t as first_t, t second_t"
     ).get
     assert(simpleChecker.checkQuery(ambigColAccess).nonEmpty, "ambig col access")
+
+    val ambigColAccess2 = parse(fullQuery,
+      "SELECT t.c1 FROM t first_t WHERE c1 > 2"
+    ).get
+    assert(simpleChecker.checkQuery(ambigColAccess2).nonEmpty, "ambig col access")
 
     val nonAmbigColAccess = parse(fullQuery,
       "SELECT first_t.c1 * second_t.c2 FROM t as first_t, t second_t"

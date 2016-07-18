@@ -34,15 +34,13 @@ class JoinAnalysisTestSuite extends FunSuite {
     // tables available in from clause
     val fromStr = "t1 as t_one, t2 INNER JOIN t3 USING cx"
     val from1 = parse(from, fromStr).get
-    assert(tableNames(tablesAvailable(from1)) === Set("t1", "t_one", "t2", "t3"))
-    assert(tableNames(tablesAvailable(from1.children.head)) === Set("t1", "t_one", "t2"))
-    assert(tableNames(tablesAvailable(from1.children(1))) === Set("t3"))
+    assert(tablesAvailable(from1).map(tableName) === Set("t_one", "t2", "t3"))
+    assert(tablesAvailable(from1.children.head).map(tableName) === Set("t_one", "t2"))
+    assert(tablesAvailable(from1.children(1)).map(tableName) === Set("t3"))
 
     val query1 = parse(query, "SELECT c1, c2 FROM " + fromStr).get
-    assert(tableNames(tablesAvailable(query1)) === Set("t1", "t_one", "t2", "t3"))
+    assert(tablesAvailable(query1).map(tableName) === Set("t_one", "t2", "t3"))
 
-    // TODO: tables used
-    // def tableNamesUsed(expr: Expr): Option[Set[String]] = expr match {
     val exprs = parse(repsep(expr, ";"),
       """
         f(c1) * t.c1 ;
@@ -70,7 +68,7 @@ class JoinAnalysisTestSuite extends FunSuite {
     // combined query
     val q: RelAlg = p(fj(j(fl(l), r)))
     val annotated = annotateWithAvailTableNames(q)
-    val s1 = Set("t1", "t_one")
+    val s1 = Set("t_one")
     val s2 = Set("t2")
     val all = s1 ++ s2
 
@@ -87,16 +85,16 @@ class JoinAnalysisTestSuite extends FunSuite {
   }
 
   test("place filter") {
-    // ((t1 x t2) x t3) x t4
+    // ((t_one x t2) x t3) x t4
     val from1 = parse(from, "t1 as t_one, t2 INNER JOIN t3 USING cx, t4").get
     val exprs = parse(repsep(predicate | expr, ";"),
       """
-        t1.c1 = t2.c1 ; // t1, t2
+        t_one.c1 = t2.c1 ; // t_one, t2
         t2.cx IS NOT NULL ; // t2
-        t1.c3 + t3.c1 = 0 ; // t1, t3
+        t_one.c3 + t3.c1 = 0 ; // t_one, t3
         c1 = t.c2 ; // unknown (c1)
         t2.c3 > 100; // t2
-        t_one.c = 100 // t1
+        t_one.c = 100 // t_one
       """
     ).get
 

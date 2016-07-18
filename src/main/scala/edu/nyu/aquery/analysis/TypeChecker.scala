@@ -261,7 +261,8 @@ class TypeChecker(info: FunctionInfo) {
     val dupCorrErrors = checkDuplicates(tables.filter(_.alias.isDefined), _.alias)
     // check table names for duplications (note that same table name, diff corr name is not a dupe)
     val dupTableErrors = checkDuplicates(tables, identity)
-    val tableNames = tables.flatMap(t => Set(t.n) ++ t.alias)
+    // if the table has an alias, that is all it can be referred as
+    val tableNames = tables.flatMap(t => Set(t.alias.getOrElse(t.n)))
     val unkCorrErrors = checkColAccesses(tableNames, allColAccesses(r))
     exprErrors ++ dupCorrErrors ++ dupTableErrors ++ unkCorrErrors
   }

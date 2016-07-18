@@ -68,13 +68,11 @@ object JoinAnalysis {
   }
 
   /**
-   * Given a set of tables, return the set of names that can be used to refer to that set of tables.
-   * Note that we don't check for uniqueness of correlation names etc, as this has already
-   * been solved during type checking.
-   * @param s set of tables
+   * Given a table return the name that can be used to refer to that table.
+   * @param t table
    * @return
    */
-  def tableNames(s: Set[Table]): Set[String] = s.flatMap(t => Set(t.n) ++ t.alias)
+  def tableName(t: Table): String = t.alias.getOrElse(t.n)
 
   /**
    * Recursively annotate a relational algebra operation with the tables available at each node
@@ -85,7 +83,7 @@ object JoinAnalysis {
     val annotate: PartialFunction[RelAlg, RelAlg] = {
       case r =>
         val tables = r.children match {
-          case c if c.isEmpty => tableNames(tablesAvailable(r))
+          case c if c.isEmpty => tablesAvailable(r).map(tableName)
           // for non-base nodes just use childrens' annotations
           case xs => xs.flatMap(x => getAvailTableNames(x)).toSet
         }
