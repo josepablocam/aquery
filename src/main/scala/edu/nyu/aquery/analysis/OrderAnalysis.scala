@@ -181,11 +181,22 @@ class OrderAnalysis(info: FunctionInfo) {
    * @return
    */
   def indirectReachable(interactions: Set[Set[Expr]], init: Set[Expr]): Set[Expr] = {
+    // for interaction purposes, assume t.c1 = c1, as this is the most conservative choice
+    def colEquals(c1: Expr, c2: Expr): Boolean = (c1, c2) match {
+      case (Id(n1), ColumnAccess(_, n2)) => n1 == n2
+      case (ColumnAccess(_, n1), Id(n2)) => n1 == n2
+      case (x, y) => x == y
+    }
     @tailrec
     // transitive closure
     def loop(interactions: Set[Set[Expr]], needOrder: Set[Expr]): Set[Expr] = {
       // if a set contains any element from needOrder, then we want to add the whole set
-      val add = interactions.filter(_.exists(needOrder.contains))
+      val add = interactions.filter { inter =>
+        // needOrder contains that column (exactly) or it is equal under our equality measure
+        inter.exists(c1 =>
+          needOrder.contains(c1) || needOrder.exists(colEquals(c1, _))
+        )
+      }
       val flatAdd = add.foldLeft(Set.empty[Expr])(_ ++ _)
       // remove the sets we added and extend the order set
       if (add.isEmpty) needOrder else loop(interactions -- add, flatAdd ++ needOrder)
@@ -194,6 +205,7 @@ class OrderAnalysis(info: FunctionInfo) {
     // added through the closure
     loop(interactions, init) -- init
   }
+
 
   /**
    * Given a sequence of expressions, obtain all columns that must be sorted to maintain
@@ -214,6 +226,33 @@ class OrderAnalysis(info: FunctionInfo) {
     val indirect = indirectReachable(interactions, direct)
     direct ++ indirect
   }
+
+
+  /**
+   * Check if `short` is a prefix of `long`. The check for order is equality, the check for
+   * column takes a function to account for situations where we might want to consider
+   * things like `c1` and `t.c1` equal.
+   *
+   * Note that when determining what columns need to be sorted, assuming `c1 = t.c1` is a
+   * conservative choice. In contrast, when determining if an ordering is a prefix, assuming this
+   * same equality, in the presence of joins, can hide errors that would otherwise arise at runtime.
+   * For example, consider isPrefixSort((Asc, c1), (Asc, t.c1)) in a query where there is join t, t1,
+   * where t has no c1 column, but t1 does, if we assume the above equality, and
+   * in doing so allow some transformation to remove the t.c1, then a runtime error that would
+   * have otherwise arisen will no longer occur.
+   * @param short shorter sequence of order/column pairs
+   * @param long longer sequence of order/column pairs
+   * @param colEquals function to check for equality of columns
+   * @return true iff short is a prefix of long
+   */
+  def isPrefixSort(
+   short: Seq[(OrderDirection, Expr)],
+   long: Seq[(OrderDirection, Expr)],
+   colEquals: (Expr, Expr) => Boolean)
+  : Boolean =
+    short.length <= long.length && short.zip(long).forall { case ((d1, c1), (d2, c2)) =>
+      d1 == d2 && colEquals(c1, c2)
+    }
 }
 
 object OrderAnalysis {

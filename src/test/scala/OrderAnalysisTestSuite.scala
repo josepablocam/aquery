@@ -136,6 +136,29 @@ class OrderAnalysisTestSuite extends FunSuite {
     val expect3 = Set[Expr](Id("c4"),  Id("c5"))
     val result3 = simple.indirectReachable(interact2, seed3)
     assert(result3 === expect3)
+
+    val seed4 = Set[Expr](Id("c6"))
+    val interact4: Set[Set[Expr]] =  Set(
+      Set(Id("c4"), Id("c5")),
+      Set(ColumnAccess("t", "c5"), Id("c6")),
+      Set(Id("c6")),
+      Set(Id("c7"))
+    )
+    val expect4 = Set[Expr](Id("c4"),  Id("c5"), ColumnAccess("t", "c5"))
+    val result4 = simple.indirectReachable(interact4, seed4)
+    assert(result4 === expect4)
+
+
+    val seed5 = Set[Expr](Id("c6"))
+    val interact5: Set[Set[Expr]] =  Set(
+      Set(Id("c4"), ColumnAccess("t1","c5")),
+      Set(ColumnAccess("t", "c5"), Id("c6")),
+      Set(Id("c6")),
+      Set(Id("c7"))
+    )
+    val expect5 = Set[Expr](ColumnAccess("t", "c5"))
+    val result5 = simple.indirectReachable(interact5, seed5)
+    assert(result5 === expect5)
   }
 
   test("minimal sorting cols") {
@@ -201,5 +224,21 @@ class OrderAnalysisTestSuite extends FunSuite {
     val expect7 = Set("c0", "c5", "c6", "c7", "c8").map(Id)
     val result7 = withContext.colsToSort(e7, collectAtRoot = true)
     assert(result7 === expect7)
+
+
+    val e8 = parse(repsep(expr, ";"),
+      """
+         c0 * sums(t.c1) ;
+         max(other.c1 + c2) ;
+         sum(c3) + c0 ;
+         c5 / f(c0 + h(100 + c6))
+      """).get
+    // c0 due to indirection (through t.c1) and due to f
+    // t.c1 due to sums
+    // c5 due to root
+    // note that c2 is no longer indirectly reachable as other.c1 != t.c1
+    val expect8: Set[Expr] = Set(Id("c0"), ColumnAccess("t", "c1"), Id("c5"))
+    val result8 = withContext.colsToSort(e8, collectAtRoot = true)
+    assert(result8 === expect8)
   }
 }
