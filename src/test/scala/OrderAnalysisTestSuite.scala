@@ -1,5 +1,5 @@
 import edu.nyu.aquery.analysis.OrderAnalysis
-import edu.nyu.aquery.ast.{Expr, ColumnAccess, Id}
+import edu.nyu.aquery.ast._
 import edu.nyu.aquery.parse.AqueryParser._
 
 import org.scalatest.FunSuite
@@ -240,5 +240,21 @@ class OrderAnalysisTestSuite extends FunSuite {
     val expect8: Set[Expr] = Set(Id("c0"), ColumnAccess("t", "c1"), Id("c5"))
     val result8 = withContext.colsToSort(e8, collectAtRoot = true)
     assert(result8 === expect8)
+  }
+
+  test("has sort and extract sort") {
+    val query1 = parse(query, "SELECT * FROM t ASSUMING ASC c1, DESC t.c2 WHERE c1 > 2").get
+    assert(simple.hasSortBy(query1))
+    assert(simple.getSort(query1) === List((Asc, Id("c1")), (Desc, ColumnAccess("t", "c2"))))
+
+    val query2 = parse(query, "SELECT * FROM t WHERE c1 > 2").get
+    assert(!simple.hasSortBy(query2))
+    assert(simple.getSort(query2) === List())
+
+    val query3 = parse(query,
+      "SELECT * FROM t, t1 INNER JOIN t2 USING c1 ASSUMING ASC c1, DESC t.c2 WHERE c1 > 2"
+    ).get
+    assert(simple.hasSortBy(query3))
+    assert(simple.getSort(query3) === List((Asc, Id("c1")), (Desc, ColumnAccess("t", "c2"))))
   }
 }

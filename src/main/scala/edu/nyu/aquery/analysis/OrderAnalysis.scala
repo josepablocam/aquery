@@ -86,6 +86,7 @@ class OrderAnalysis(info: FunctionInfo) {
   def removesOrderDependence(locals: Map[String, Boolean], expr: Expr): Boolean =
     expr match {
       case Id(v) => locals.getOrElse(v, false)
+      case ColumnAccess(_, _) => false
       case FunCall(f, _) => removesOrderDependence(f)
       case lit: Lit => true
       case _ => expr.children.forall(removesOrderDependence(locals, _))
@@ -122,8 +123,7 @@ class OrderAnalysis(info: FunctionInfo) {
       args.flatMap(directOrderDependentCols(_, collect = false)).toSet
     case FunCall(f, args) if hasOrderDependence(f) =>
       args.flatMap(directOrderDependentCols(_, collect = true)).toSet
-    case Id(_) if collect => Set(expr)
-    case ColumnAccess(_, _) if collect => Set(expr)
+    case Id(_) | ColumnAccess(_, _) | WildCard | RowId if collect => Set(expr)
     case _ => expr.children.flatMap(directOrderDependentCols(_, collect)).toSet
   }
 
@@ -151,8 +151,7 @@ class OrderAnalysis(info: FunctionInfo) {
       case FunCall(f, args) if removesOrderDependence(f) =>
         val (curr, acc) = args.map(e => collect(info, e)).unzip
         (Set(), combine(curr) +: acc.flatten)
-      case Id(_) => (Set(expr), Nil)
-      case ColumnAccess(_, _) => (Set(expr), Nil)
+      case Id(_) | ColumnAccess(_, _) | WildCard | RowId => (Set(expr), Nil)
       case _ =>
         val (curr, acc) = expr.children.map(e => collect(info, e)).unzip
         (combine(curr), acc.flatten)
@@ -227,6 +226,23 @@ class OrderAnalysis(info: FunctionInfo) {
     direct ++ indirect
   }
 
+  /**
+   * Extract all column references in an expression
+   * @param e
+   * @return
+   */
+  def allCols(e: Expr): Set[Expr] = e match {
+    case Id(_) | ColumnAccess(_, _) | RowId | WildCard => Set(e)
+    case _ => e.children.flatMap(allCols).toSet
+  }
+
+  /**
+   * Extract all column references in a sequence of expressions
+   * @param e
+   * @return
+   */
+  def allCols(e: Seq[Expr]): Set[Expr] = e.flatMap(allCols).toSet
+
 
   /**
    * Check if `short` is a prefix of `long`. The check for order is equality, the check for
@@ -253,6 +269,22 @@ class OrderAnalysis(info: FunctionInfo) {
     short.length <= long.length && short.zip(long).forall { case ((d1, c1), (d2, c2)) =>
       d1 == d2 && colEquals(c1, c2)
     }
+
+  /**
+   * Relational operation has a sortBy node
+   * @param r
+   * @return
+   */
+  def hasSortBy(r: RelAlg): Boolean =
+    r.findp { case SortBy(_, _, _) => true }.isDefined
+
+  /**
+   * Get requested sort-by for a particular plan
+   * @param r
+   * @return
+   */
+  def getSort(r: RelAlg): Seq[(OrderDirection, Expr)] =
+    r.findp { case SortBy(_, _, _) => true }.collect { case SortBy(_, order, _) => order}.getOrElse(Nil)
 }
 
 object OrderAnalysis {

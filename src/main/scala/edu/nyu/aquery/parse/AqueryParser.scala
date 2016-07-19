@@ -438,7 +438,7 @@ object AqueryParser extends StandardTokenParsers with PackratParsers {
       )
 
   lazy val eq: PackratParser[Expr] = positioned(
-    eq ~ ("=" | "!=") ~ rel ^^ { case e ~ op ~ r => BinExpr(if(op == "==") Eq else Neq, e, r) }
+    eq ~ ("=" | "!=") ~ rel ^^ { case e ~ op ~ r => BinExpr(if(op == "=") Eq else Neq, e, r) }
     |  rel
     )
 

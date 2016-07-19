@@ -5,29 +5,37 @@ import java.io.{File, PrintStream}
 import scala.annotation.tailrec
 import scala.io.Source
 
-import edu.nyu.aquery.parse.AqueryParser
 import edu.nyu.aquery.ast.Dot
 import edu.nyu.aquery.analysis.TypeChecker
+import edu.nyu.aquery.optimization.BasicOptimizer
+import edu.nyu.aquery.parse.AqueryParser
+
+
 
 /**
  * AQuery executable. Takes various command line arguments.
  */
 object Aquery extends App {
-  def help(): Unit = {
-    val msg =
+  def trimMsg(msg: String) = msg.split("\n").map(_.trim).filter(_.length > 0).mkString("\n")
+
+  def help(): String = {
+    trimMsg(
       """
         AQuery Compiler
-        Usage: -p  -c [-a #] [-s] [-o <file-name>] <file>
+        Options:
         -p: print dot graph to stdout
-        -c: generated code
-        -a: optimization level
+        -c: generate code
+        -a: optimize (0/1)
+        -opts: comma separated list of optimizations (set to all by default if not provided)
         -s: silence warnings
         -tc: (soft) type checking (off by default)
         -o: code output file (if none, then stdout)
         If both -p and -c are set, will only perform last specified
-      """.split("\n").map(_.trim).filter(_.length > 0).mkString("\n")
-    println(msg)
+      """
+    )
   }
+
+  def optsAvailable(): String = trimMsg(BasicOptimizer().description)
 
   abstract class CompilerActions
 
@@ -40,6 +48,7 @@ object Aquery extends App {
     optim: Int = 0,
     silence: Boolean = false,
     typeCheck: Boolean = false,
+    optimFuns: Seq[String] = Nil,
     input: Option[String] = None,
     output: Option[String] = None)
 
@@ -57,20 +66,22 @@ object Aquery extends App {
     case (c, "-s" :: rest) => parseConfig(c.map(_.copy(silence = true)), rest)
     case (c, "-tc" :: rest) => parseConfig(c.map(_.copy(typeCheck = true)), rest)
     case (c, f :: Nil) if f(0) != '-' => c.map(_.copy(input = Some(f)))
+    case (c, "-opts" :: opts :: rest) if opts(0) != '-' =>
+      parseConfig(c.map(_.copy(optimFuns = opts.split(","))), rest)
     case _ => None
   }
 
   // Configuration -------------------------------------------------------------
-
   val defaultConfig: Option[AqueryConfig] = Some(AqueryConfig())
   val config = parseConfig(defaultConfig, args.toList).getOrElse {
     println(help())
+    println()
+    println(optsAvailable())
     System.exit(1)
     AqueryConfig()
   }
 
   // Parsing -------------------------------------------------------------
-
   val inFile = config.input.map(Source.fromFile).getOrElse(Source.stdin)
   val contents = inFile.getLines().mkString("\n")
   inFile.close()
@@ -93,11 +104,20 @@ object Aquery extends App {
     if (errs.nonEmpty) System.exit(1)
   }
 
+  // Optimization of plan
+  val optimized = parsed.map { prog =>
+    if (config.optim != 0)
+      /// optimize
+      BasicOptimizer(prog, config.optimFuns).optimize
+    else
+      prog
+  }
+
   // Action -------------------------------------------------------------
-  val representation = parsed.map { p =>
+  val representation = optimized.map { p =>
     config.action match {
       case Graph => Dot.toGraph(p)
-      case Compile => p.toString
+      case Compile => p.toString + "\n"
     }
   }
 

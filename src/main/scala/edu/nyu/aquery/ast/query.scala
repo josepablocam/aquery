@@ -1,5 +1,7 @@
 package edu.nyu.aquery.ast
 
+import scala.annotation.tailrec
+
 /**
  * Optimizable components are encoded using operators that include a value field `attr` which is a
  * mapping to any possible attributes that an analyzer might need/use. We encode this as a map to
@@ -18,10 +20,16 @@ trait Analyzable[T <: Analyzable[T]] {
    * @param v value
    */
   def setAttr(k: Any, v: Any): T
+
+  /**
+   * Remove all attributes
+   * @return
+   */
+  def clearAttr: T
 }
 
 /**
- * All optimizable query componentats are from relation algebra and they are allowed
+ * All optimizable query components are from relation algebra and they are allowed
  * as top-level constructs in AQuery
  */
 trait RelAlg extends AST[RelAlg] with Analyzable[RelAlg] with TopLevel {
@@ -30,7 +38,48 @@ trait RelAlg extends AST[RelAlg] with Analyzable[RelAlg] with TopLevel {
   def dotify(currAvail: Int): (String, Int) = RelAlg.dotify(this, currAvail)
   def transform(f: PartialFunction[RelAlg, RelAlg]) = RelAlg.transform(this, f)
   def setAttr(k: Any, v: Any): RelAlg
+
+  /**
+   * Return first node in relational algebra operation that satisfies the predicate.
+   * Children nodes are searched in DFS pre-order (parent node first, and children left to right)
+   * @param pred
+   * @return
+   */
+  def find(pred: RelAlg => Boolean): Option[RelAlg] = {
+    @tailrec
+    def loop(rs: Seq[RelAlg]): Option[RelAlg] = rs match {
+      case Nil => None
+      case x :: xs => if (pred(x)) Some(x) else loop(x.children ++ xs)
+    }
+    loop(List(this))
+  }
+
+  // convenience wrapper around find that lifts partial function
+  def findp(pred: PartialFunction[RelAlg, Boolean]): Option[RelAlg] =
+    find(x => pred.lift(x).getOrElse(false))
+
+  /**
+   * Collected nodes in a relational algebra operation while predicate is satisfied, and apply
+   * a a function to those that are collected. Nodes are traversed DFS pre-order
+   * @param pred predicate to satisfy
+   * @param fun transformation to apply to nodes collected (per-node basis)
+   * @tparam A
+   * @return
+   */
+  def takeWhile[A](pred: RelAlg => Boolean, fun: RelAlg => A): Seq[A] = {
+    @tailrec
+    def loop(rs: Seq[RelAlg], acc: Seq[A]): Seq[A] = rs match {
+      case Nil => acc
+      case x :: xs => if (pred(x)) loop(x.children ++ xs, fun(x) +: acc) else acc
+    }
+    loop(List(this), Nil).reverse
+  }
 }
+
+/**
+ * A simple trait that should be extended by any construct that filters data in a plan
+ */
+trait FiltersData
 
 /**
  * Encodes a query
@@ -44,6 +93,7 @@ case class Query(
   main: RelAlg,
   attr: Map[Any, Any] = Map()) extends AST[Query] with Analyzable[Query] with TopLevel {
   def setAttr(k: Any, v: Any) = this.copy(attr = attr.updated(k, v))
+  def clearAttr: Query = this.copy(attr = Map())
 
   def dotify(currAvail: Int) = {
     val selfNode = Dot.declareNode(currAvail, "full-query")
@@ -86,6 +136,7 @@ case class Project(
   val children = List(t)
   val expr = ps.map(_._1)
   def setAttr(k: Any, v: Any) = this.copy(attr = attr.updated(k, v))
+  def clearAttr = this.copy(attr = Map())
 }
 
 /**
@@ -97,10 +148,11 @@ case class Project(
 case class Filter(
   t: RelAlg,
   fs: List[Expr],
-  attr: Map[Any, Any] = Map()) extends RelAlg {
+  attr: Map[Any, Any] = Map()) extends RelAlg with FiltersData {
   val children = List(t)
   val expr = fs
   def setAttr(k: Any, v: Any) = this.copy(attr = attr.updated(k, v))
+  def clearAttr = this.copy(attr = Map())
 }
 
 /**
@@ -118,6 +170,7 @@ case class GroupBy(
   val children = List(t)
   val expr = gs.map(_._1) ++ having
   def setAttr(k: Any, v: Any) = this.copy(attr = attr.updated(k, v))
+  def clearAttr = this.copy(attr = Map())
 }
 
 /**
@@ -133,6 +186,7 @@ case class SortBy(
   val children = List(t)
   val expr: Seq[Expr] = os.map(_._2)
   def setAttr(k: Any, v: Any) = this.copy(attr = attr.updated(k, v))
+  def clearAttr = this.copy(attr = Map())
 }
 
 // Possible directions for sorting
@@ -162,6 +216,7 @@ case class Table(
   val children: Seq[RelAlg] = Nil
   val expr: Seq[Expr] = Nil
   def setAttr(k: Any, v: Any) = this.copy(attr = attr.updated(k, v))
+  def clearAttr = this.copy(attr = Map())
 }
 
 /**
@@ -178,6 +233,7 @@ case class TopApply(
   val children = List(t)
   val expr: Seq[Expr] = Nil
   def setAttr(k: Any, v: Any) = this.copy(attr = attr.updated(k, v))
+  def clearAttr = this.copy(attr = Map())
 }
 
 /**
@@ -195,6 +251,7 @@ case class BottomApply(
   val children: Seq[RelAlg] = Nil
   val expr = args
   def setAttr(k: Any, v: Any) = this.copy(attr = attr.updated(k, v))
+  def clearAttr = this.copy(attr = Map())
 }
 
 /**
@@ -215,6 +272,7 @@ case class Join(
   val children = List(l, r)
   val expr = cond
   def setAttr(k: Any, v: Any) = this.copy(attr = attr.updated(k, v))
+  def clearAttr = this.copy(attr = Map())
 }
 
 
