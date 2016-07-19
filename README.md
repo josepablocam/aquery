@@ -9,10 +9,6 @@ edu.nyu.aquery.parse contains all parsing code
 edu.nyu.aquery.analysis contains all analysis related code
 
 TODO:
-* analyzer (serial)
-   * join references
-   * grouped
-* Optimizer (serial)
 * Code gen (serial)
 
 * Analyzer (parallel)
