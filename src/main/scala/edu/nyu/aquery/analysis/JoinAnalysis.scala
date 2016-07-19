@@ -19,7 +19,7 @@ object JoinAnalysis {
    */
   def tableNamesUsed(expr: Expr): Option[Set[String]] = expr match {
     case ColumnAccess(t, _) => Some(Set(t))
-    case Id(_) => None
+    case Id(_) | WildCard | RowId => None
     case _ =>
       val empty: Option[Set[String]] = Some(Set())
       expr.children.map(tableNamesUsed).foldLeft(empty) {
