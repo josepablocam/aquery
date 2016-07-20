@@ -111,7 +111,7 @@ class BasicOptimizer(val input: Seq[TopLevel] = Nil, val optims: Seq[String] = N
   def embedSort(r: RelAlg): RelAlg = {
     val optim: PartialFunction[RelAlg, RelAlg] = {
       case orig @ GroupBy(SortBy(src, order, _), groups, having, attr) =>
-        // if none of the expressions depend on order, we can group/filter first
+        // if none of the expressions depend on order, we can group first
         if (!orig.expr.exists(orderAnalyzer.hasOrderDependence))
           SortBy(GroupBy(src, groups, having, attr), order)
         else
@@ -271,25 +271,29 @@ class BasicOptimizer(val input: Seq[TopLevel] = Nil, val optims: Seq[String] = N
    * @return
    */
   def sortToSortCols(r: RelAlg): RelAlg = {
+    // retrieve columns that should be sorted
+    def getCols(p: RelAlg): Set[Expr] = {
+      // all nodes in the tree above the sort by
+      val nodesAbove = r.takeWhile({ case SortBy(_, _, _) => false; case _ => true}, identity)
+      val mustSortAll = nodesAbove.exists { e =>
+        // there is still filtering above or grouping
+        e.isInstanceOf[FiltersData] || e.isInstanceOf[GroupBy]
+      }
+      val exprsAbove = nodesAbove.flatMap(_.expr)
+      if (mustSortAll)
+        orderAnalyzer.allCols(exprsAbove)
+      else
+        orderAnalyzer.colsToSort(exprsAbove, collectAtRoot = true)
+    }
+
     if (countSortBy(r) > 1)
       throw new Exception("Current optimizer assumes max 1 sort-by in a plan")
 
     if (!orderAnalyzer.hasSortBy(r))
       r
     else {
-      // all nodes in the tree above the sort by
-      val nodesAbove = r.takeWhile({ case SortBy(_, _, _) => false; case _ => true}, identity)
-      // check using the general FiltersData trait
-      val hasFilters = nodesAbove.exists(e => e.isInstanceOf[FiltersData])
-      val exprsAbove = nodesAbove.flatMap(_.expr)
-      // if we're still filtering data, we need to sort all columns above the sorting node
-      val cols =
-        if (hasFilters)
-          orderAnalyzer.allCols(exprsAbove)
-        else
-          orderAnalyzer.colsToSort(exprsAbove, collectAtRoot = true)
+      val cols = getCols(r)
       val cleanCols: Set[Expr] = if (cols.contains(WildCard)) Set(WildCard) else cols
-
       val optim: PartialFunction[RelAlg, RelAlg] = {
         case s @ SortBy(src, order, _) =>
           if (cleanCols.nonEmpty)
