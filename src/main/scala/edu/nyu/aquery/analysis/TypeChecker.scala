@@ -163,6 +163,16 @@ class TypeChecker(info: FunctionInfo) {
   }
 
   /**
+   * Some expression are only allowed in queries
+   * @param expr expression to check
+   * @return
+   */
+  def checkProhibitedExpr(expr: Expr): Seq[AnalysisError] = expr match {
+    case WildCard | ColumnAccess(_, _) | RowId => List(IllegalExpr(expr.dotify(1)._1, expr.pos))
+    case _ => expr.children.flatMap(checkProhibitedExpr)
+  }
+
+  /**
    * Recursively type check expressions in a relational algebra operator and its arguments.
    * Filter and having must be boolean expressions, similarly for conditions in a join.
    * @param r
@@ -191,7 +201,7 @@ class TypeChecker(info: FunctionInfo) {
   def checkSortExpr(s: Seq[Expr]): Seq[AnalysisError] = {
     s.collect {
       case x if !x.isInstanceOf[Id] && !x.isInstanceOf[ColumnAccess] =>
-        IllegalSort(x.dotify(1)._1, x.pos)
+        IllegalExpr(x.dotify(1)._1, x.pos)
     }
   }
 
@@ -311,7 +321,8 @@ class TypeChecker(info: FunctionInfo) {
    */
   def checkTableModification(m: TableModification): Seq[AnalysisError] = m match {
     case Create(_, Right(q)) => checkQuery(q)
-    case Insert(_, o, _, Left(e)) => e.flatMap(checkExpr(_)._2) ++ checkSortExpr(o.map(_._2))
+    case Insert(_, o, _, Left(e)) =>
+      e.flatMap(checkExpr(_)._2) ++ checkSortExpr(o.map(_._2)) ++ e.flatMap(checkProhibitedExpr)
     case Insert(_, o, _, Right(q)) => checkQuery(q) ++ checkSortExpr(o.map(_._2))
     case _ => Nil
   }
@@ -323,8 +334,8 @@ class TypeChecker(info: FunctionInfo) {
    */
   def checkUDF(f: UDF): Seq[AnalysisError] =
     f.cs.flatMap {
-      case Left(as) => checkExpr(as.e)._2
-      case Right(e) => checkExpr(e)._2
+      case Left(as) => checkExpr(as.e)._2 ++ checkProhibitedExpr(as.e)
+      case Right(e) => checkExpr(e)._2 ++ checkProhibitedExpr(e)
     }
 
   /**
