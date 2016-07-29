@@ -39,46 +39,47 @@ object FunctionInfo {
   val numAndBoolOrNum_Self: Sig =
     { case a :: v :: Nil if a.consistent(num) && v.consistent(numAndBool) => v }
 
-
   val normal = Set(
-    new BuiltInSummary("ABS", num_Num, false),
-    new BuiltInSummary("AVG", boolOrNum_Num, false, true),
-    new BuiltInSummary("COUNT", { case x :: Nil => TNumeric }, false, true),
-    new BuiltInSummary("FILL", selfAndSelf_Self, false),
-    new BuiltInSummary("IN", { case x :: xs if xs.forall(_.consistent(Set(x))) => TBoolean }, false),
-    new BuiltInSummary("LIKE", selfAndSelf_Bool, false),
-    new BuiltInSummary("BETWEEN", { case xs if xs.forall(_.consistent(num)) => TBoolean }, false),
+    new BuiltInSummary("ABS", num_Num, false, false, false),
+    new BuiltInSummary("AVG", boolOrNum_Num, false, true, true),
+    new BuiltInSummary("COUNT", { case x :: Nil => TNumeric }, false, true, true),
+    new BuiltInSummary("FILL", selfAndSelf_Self, false, false, false),
+    new BuiltInSummary("IN", { case x :: xs if xs.forall(_.consistent(Set(x))) => TBoolean }, false, false, false),
+    new BuiltInSummary("LIKE", selfAndSelf_Bool, false, false, false),
+    new BuiltInSummary("BETWEEN", { case xs if xs.forall(_.consistent(num)) => TBoolean }, false, false, false),
     new BuiltInSummary("MAX", {
       case v @ x :: xs if v.forall(_.consistent(numAndBool)) =>
         if (v.forall(_.consistent(bool))) TBoolean else TNumeric
-    }, false, true),
+    }, false, true, true),
     new BuiltInSummary("MIN", {
       case v @ x :: xs if v.forall(_.consistent(numAndBool)) =>
         if (v.forall(_.consistent(bool))) TBoolean else TNumeric
-    }, false, true),
-    new BuiltInSummary("NOT", bool_Bool, false),
-    new BuiltInSummary("NULL", { case x :: Nil  => TBoolean }, false),
-    new BuiltInSummary("OR", { case v @ x :: y :: xs if v.forall(_.consistent(bool)) => TBoolean }, false),
-    new BuiltInSummary("PRD", boolOrNum_Num, false, true),
-    new BuiltInSummary("SQRT", num_Num, false),
-    new BuiltInSummary("SUM",  num_Num orElse bool_Num, false, true)
+    }, false, true, true),
+    new BuiltInSummary("NOT", bool_Bool, false, false, false),
+    new BuiltInSummary("NULL", { case x :: Nil  => TBoolean }, false, false, false),
+    new BuiltInSummary("OR", { case v @ x :: y :: xs if v.forall(_.consistent(bool)) => TBoolean }, false, false, false),
+    new BuiltInSummary("PRD", boolOrNum_Num, false, true, true),
+    new BuiltInSummary("SQRT", num_Num, false, false, false),
+    new BuiltInSummary("SUM",  num_Num orElse bool_Num, false, true, true)
   )
 
+  def odBuiltIn(s: String, sig: Sig): BuiltInSummary = new BuiltInSummary(s, sig, true, false, true)
+
   val orderDependent = Set(
-    new BuiltInSummary("AVGS", boolOrNum_Num orElse numAndBoolOrNum_Num, true),
-    new BuiltInSummary("DELTAS", num_Num, true),
-    new BuiltInSummary("DROP",  numAndSelf_Self, true),
-    new BuiltInSummary("FILLS", self_Self orElse selfAndSelf_Self, true),
+    odBuiltIn("AVGS", boolOrNum_Num orElse numAndBoolOrNum_Num),
+    odBuiltIn("DELTAS", num_Num),
+    odBuiltIn("DROP",  numAndSelf_Self),
+    odBuiltIn("FILLS", self_Self orElse selfAndSelf_Self),
     // TODO: first/last should have size check
-    new BuiltInSummary("FIRST", self_Self orElse numAndSelf_Self, true),
-    new BuiltInSummary("LAST", self_Self orElse numAndSelf_Self, true),
-    new BuiltInSummary("MAXS", boolOrNum_Self orElse numAndBoolOrNum_Self, true),
-    new BuiltInSummary("MINS", boolOrNum_Self orElse numAndBoolOrNum_Self, true),
-    new BuiltInSummary("NEXT", self_Self orElse numAndSelf_Self, true),
-    new BuiltInSummary("PREV", self_Self orElse numAndSelf_Self, true),
-    new BuiltInSummary("PRDS", boolOrNum_Num orElse numAndBoolOrNum_Num, true),
-    new BuiltInSummary("SUMS", boolOrNum_Num orElse numAndBoolOrNum_Num, true),
-    new BuiltInSummary("VARS", boolOrNum_Num orElse numAndBoolOrNum_Num, true)
+    odBuiltIn("FIRST", self_Self orElse numAndSelf_Self),
+    odBuiltIn("LAST", self_Self orElse numAndSelf_Self),
+    odBuiltIn("MAXS", boolOrNum_Self orElse numAndBoolOrNum_Self),
+    odBuiltIn("MINS", boolOrNum_Self orElse numAndBoolOrNum_Self),
+    odBuiltIn("NEXT", self_Self orElse numAndSelf_Self),
+    odBuiltIn("PREV", self_Self orElse numAndSelf_Self),
+    odBuiltIn("PRDS", boolOrNum_Num orElse numAndBoolOrNum_Num),
+    odBuiltIn("SUMS", boolOrNum_Num orElse numAndBoolOrNum_Num),
+    odBuiltIn("VARS", boolOrNum_Num orElse numAndBoolOrNum_Num)
   )
 
   val defaultInfo = (normal ++ orderDependent).map { x => x.f -> x }.toMap

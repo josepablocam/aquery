@@ -98,8 +98,8 @@ class BasicOptimizerTestSuite extends FunSuite {
       "SELECT * FROM t ASSUMING ASC t.c1 WHERE sum(c2) = 10 AND c5 = 10 AND c1 < 10"
     ).get
     val result3 = optimizer.filterBeforeSort(query3)
-    val expect3 = query3
-    assert(result3 === query3, "selections after sort (due to sum)")
+    val expect3 = s(filter(t("t"), "sum(c2) = 10 AND c5 = 10 AND c1 < 10"), "ASC t.c1")
+    assert(result3.children.head === expect3, "selections before sort (no order dependence)")
 
     // selections only before sorting
     val query4 = parse(query,
