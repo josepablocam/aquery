@@ -144,7 +144,7 @@ class ParserTestSuite extends FunSuite {
 
     // column-wise
     val dCS = "DELETE c1, c2 from t"
-    val dCE = Delete("t", Left("c1" :: "c2" :: Nil), Nil, Nil, Nil)
+    val dCE = Delete("t", Left(Id("c1") :: Id("c2") :: Nil), Nil, Nil, Nil)
     assert(expectParse(delete, dCS)(Some(dCE == _)), "column-wise deletion")
 
     assert(expectParse(delete, "DELETE c1 FROM t WHERE c1 > 100")(None), "can't mix col-row delete")

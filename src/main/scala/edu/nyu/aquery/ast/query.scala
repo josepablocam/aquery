@@ -393,14 +393,14 @@ case class Update(
 /**
  * Delete statements
  * @param t relation from which to delete
- * @param del columns to delete or constraints for rows to delete
+ * @param del Left(columns to delete) or Right(constraints for rows to delete)
  * @param order assumes order prior to deletions
  * @param groupby possible group by clause
  * @param having possible having clause, requires a group-by clause
  */
 case class Delete(
   t: String,
-  del: Either[List[String], List[Expr]],
+  del: Either[List[Id], List[Expr]],
   order: List[(OrderDirection, Expr)],
   groupby: List[Expr],
   having: List[Expr]) extends ModificationQuery {

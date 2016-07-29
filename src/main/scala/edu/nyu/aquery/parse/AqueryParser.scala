@@ -356,7 +356,7 @@ object AqueryParser extends StandardTokenParsers with PackratParsers {
           val (gL, hL) = gh.map { case g ~ h => (g, h) }.getOrElse((Nil, Nil))
           Delete(t, Right(w.getOrElse(Nil)), o.getOrElse(Nil), gL, hL)
       }
-     | (DELETE ~> rep1sep(ident, ",") <~ FROM) ~ ident ^^ { case cs ~ t =>
+     | (DELETE ~> rep1sep(id, ",") <~ FROM) ~ ident ^^ { case cs ~ t =>
       Delete(t, Left(cs), Nil, Nil, Nil)
     }
      )
@@ -367,9 +367,9 @@ object AqueryParser extends StandardTokenParsers with PackratParsers {
   // the order clause applies to the new data to be inserted
   def insert: Parser[Insert] =
     positioned(INSERT ~> INTO ~> ident ~
-      (ASSUMING ~> order).? ~
       modInsert.? ~
-      srcInsert ^^ { case n ~ o ~ m ~ s => Insert(n, o.getOrElse(Nil), m.getOrElse(Nil), s)})
+      (ASSUMING ~> order).? ~
+      srcInsert ^^ { case n ~ m ~ o ~ s => Insert(n, o.getOrElse(Nil), m.getOrElse(Nil), s)})
 
   // Insertion order can be modified by specifying the columns to put value sinto
   def modInsert: Parser[List[String]] = "(" ~> repsep(ident, ",") <~ ")"
