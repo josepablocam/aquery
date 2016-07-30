@@ -1,14 +1,12 @@
 package edu.nyu.aquery.codegen
 
+import edu.nyu.aquery.ast._
 import edu.nyu.aquery.optimization.BasicOptimizer.{ColSortBy, ReorderFilter}
 
-import scala.util.Try
-import scalaz.State
-
-import edu.nyu.aquery.ast._
-
 import scala.io.Source
+import scala.util.Try
 
+import scalaz.State
 
 class KdbGenerator extends BackEnd {
   // set of built-ins (with overloads disambiguated by attaching number of args)
@@ -16,7 +14,7 @@ class KdbGenerator extends BackEnd {
   val BUILT_INS =
     """
       abs, and, avg, avgs_1, avgs_2, between, concatenate, count, deltas, distinct,
-      drop, enlist, exec_arrays, flatten, fill, first_1, first_2, is, in, indexEven, indexOdd,
+      drop, list, exec_arrays, flatten, fill, first_1, first_2, is, in, indexEven, indexOdd,
       indexEveryN, last_1, last_2, like, makeNull, max, maxs_1, maxs_2, min, mins_1, mins_2,
       mod, moving, next_1, next_2, not, null, or, overlaps, pow, prev_1, prev_2, prd, prds,
       ratios, reverse, show, sum, sums_1, sums_2, sqrt, stddev, toSym, vars
@@ -32,7 +30,7 @@ class KdbGenerator extends BackEnd {
 
   // variadic functions need to be given arguments as a list, rather than in usual fashion
   // e.g (upsert/)(t;t1;t2)
-  val VARIADIC = "and,concatenate,or".split(",").map(_.trim).toSet
+  val VARIADIC = "and,concatenate,or,list".split(",").map(_.trim).toSet
 
   // Encapsulates the environment for purposes of code generation
   case class CodeState(
@@ -415,7 +413,7 @@ class KdbGenerator extends BackEnd {
   }
 
   /**
-   * Generate code for if-then pair, returns (c; t)
+   * Generate code for if-then pair, returns (enlist; c; t)
    * @param it
    * @return
    */
@@ -423,7 +421,7 @@ class KdbGenerator extends BackEnd {
     for (
       c <- genExpr(it.c);
       t <- genExpr(it.t)
-    ) yield s"($c; $t)"
+    ) yield addEnlist(s"$c; $t")
 
   /**
    * Generate code for a case expression
@@ -438,7 +436,7 @@ class KdbGenerator extends BackEnd {
       c <- cond;
       it <- ifThens;
       ec <- elseClause
-    ) yield s"(.aq.cond; $c; ($it); $ec)"
+    ) yield s"(.aq.cond; $c;${addEnlist(it)}; $ec)"
   }
 
   /**
@@ -774,9 +772,9 @@ class KdbGenerator extends BackEnd {
    */
   def genCreate(c: Create): CodeGen = c match {
     case Create(n, Right(q)) =>
-      for(query <- genQuery(q)) yield s".aq.show $n:{\n$query\n}[];"
+      for(query <- genQuery(q)) yield s".aq.show ${kdbSym(n)} set {\n$query\n }[];"
     case Create(n, Left(s)) =>
-      SimpleState.unit(s".aq.show $n:${genSchema(s)};")
+      SimpleState.unit(s".aq.show ${kdbSym(n)} set ${genSchema(s)};")
   }
 
   /**
@@ -821,7 +819,6 @@ class KdbGenerator extends BackEnd {
    */
   def getFileHandle(f: String): String = s"""hsym `$$"$f""""
 
-  // TODO: clean this one up to match update/delete style...cleaner
   /**
    * Generate code for an insertion into an existing table. Can insert values or from query
    * @param i
@@ -882,9 +879,9 @@ class KdbGenerator extends BackEnd {
           val gClean = if (cleanGroups.nonEmpty) Some(g) else None
           having match {
             case Nil =>
-              s".aq.show $t:{\n$init\n ${kdbUpdate(Some(sortedT), Some(w), gClean, Some(s))}\n }[];"
+              s".aq.show ${kdbSym(t)} set {\n$init\n ${kdbUpdate(Some(sortedT), Some(w), gClean, Some(s))}\n }[];"
             case _ =>
-              s".aq.show $t:{\n$init\n$ix\n\n ${
+              s".aq.show ${kdbSym(t)} set {\n$init\n$ix\n\n ${
                 kdbUpdate(Some(sortedT), Some("enlist " + vectorName), gClean, Some(s))
               }\n }[];"
           }
@@ -906,7 +903,7 @@ class KdbGenerator extends BackEnd {
         for (
           init <- genPlan(wrappedT, ignoreResult);
           cols <- genExprList(cs, wrap = true)
-        ) yield s".aq.show $t:{\n$init\n ${kdbDeleteCols(t, cols)}\n }[];"
+        ) yield s".aq.show ${kdbSym(t)} set {\n$init\n ${kdbDeleteCols(t, cols)}\n }[];"
       case Delete(t, Right(fs), _, groupby, having) =>
         for (
           init <- genPlan(wrappedT, ignoreResult);
@@ -915,8 +912,8 @@ class KdbGenerator extends BackEnd {
           ix <- genBooleanVector(sortedT, fs, groupby, having, vectorName)
         ) yield {
           having match {
-            case Nil => s".aq.show $t:{\n$init\n ${kdbDeleteWhere(sortedT, w)}\n }[];"
-            case _ => s".aq.show $t:{\n$init\n$ix\n\n ${
+            case Nil => s".aq.show ${kdbSym(t)} set {\n$init\n ${kdbDeleteWhere(sortedT, w)}\n }[];"
+            case _ => s".aq.show ${kdbSym(t)} set {\n$init\n$ix\n\n ${
               kdbDeleteWhere(sortedT, "enlist " + vectorName)
             }\n }[];"
           }
@@ -998,13 +995,13 @@ class KdbGenerator extends BackEnd {
    * @return
    */
   def generate(prog: Seq[TopLevel]): String = {
-    val run = for (
+    val translator = for (
       prelude <- getPrelude;
       msg <- SimpleState.unit("// Translation begins here");
       code <- genCodeList(prog.toList, "\n\n")(e => for (_ <- cleanUpEnv; c <- genTopLevel(e)) yield c)
     ) yield s"$prelude\n$msg\n$code\n"
     // generate code with initially clean state
-    run(CodeState())._2
+    translator(CodeState())._2
   }
  }
 

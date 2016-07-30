@@ -21,7 +21,6 @@
 // rename columns using a prefix
 .aq.rcols:{[t;p] $[0=count p; t; .aq.drcols[t;c!`$(p,"__"),/:string c:cols t]]};
 
-
 // initialize table and add to relevant global info
 .aq.initTable:{[t;nm;rename]
    // given tables column dictionary
@@ -56,17 +55,23 @@
  @[t;cl inter $[99h=type t;key t;cl];@[;ix]]
  }
 
+// sort a table when it is grouped (handles group columns appropriately)
 .aq.sortGrouped:{[tg;d;c]
   k:keys tg;
-  // remove tuples involving grouping direction. semantics indicate group is after sort
+  // remove tuples involving grouping direction. semantics indicate grouping is after sort
   // so new order can be imposed via grouping e.g. select * by c1, c3 from `c1 xasc `c3 xdesc t
   dc:d where not (last each d) in k;
-  $[0<count dc;.aq.sort[ ;dc;c] each tg;tg]
+  $[(0=count tg)|0=count dc;tg;.aq.sort[ ;dc;c] each tg]
  }
 
 
 // join using preparation
-.aq.joinUsingPrep:{[cs;j] $[2<>count m:cs where cs like "*__",s:string j;'"ambig-join:",s;`rename`remap!(m!2#n;((.aq.cd?m),j)!(1+count m)#n:`$"_"sv string m)]};
+.aq.joinUsingPrep:{[cs;j]
+  $[2<>count m:cs where cs like "*__",s:string j;
+    '"ambig-join:",s;
+    `rename`remap!(m!2#n;((.aq.cd?m),j)!(1+count m)#n:`$"_"sv string m)
+    ]
+  };
 
 .aq.joinUsing:{[jf;l;r;cs]
   // join using information
@@ -110,40 +115,28 @@ k).aq.ejix:{(=x#z:0!z)x#y:0!y};
   outer:s value matches;
   $[hasneq;raze .aq.nj'[inner;outer;(count matches)#enlist p];raze {x cross y}'[inner;outer]]
  };
+
 // check if tables are keyed on join keys
 // if so use ij instead of ej, much more performant, same semantics in such a case
 .aq.iskey:{(count[k]>0)&min (k:keys x) in y};
+
 // faster equi join based on keyed or not
 .aq.ej:{[k;t1;t2] $[(kt2:.aq.iskey[t1;k])|kt1:.aq.iskey[t2;k]; $[kt1;t1 ij t2;t2 ij t1]; ej[k;t1;t2]]};
 
-
-
 // check attributes
 .aq.chkattr:{[x;t] any (.aq.cd where any each flip .aq.cd like/: "*",/:string (),x) in exec c from meta t where not null a};
-
-
 
 // enlist for variables inside functions
 .aq.funEnlist:{$[0>type x;x;enlist x]};
 
 .aq.wildCard:{{x!x} cols x};
 
-// case expression
-.aq.else:{$[0=count x;first 0#y;x]};
-// explicit conditions
-.aq.eCond:{[ct;e] ?[ct[0;0]; ct[0;1]; $[1=count ct; .aq.else[e; ct[0;1]]]; .z.s[1_ct;e]]};
-// implicit conditions
-.aq.searchedCond:{[v;ct;e]  .aq.eCond[flip ((=;v; ) each first fct; fct:last flip ct); e]};
-// wrapper
-.aq.cond:{[v;ct;e] $[0=count v; .aq.eCond[ct;e]; .aq.searchedCond[v;ct;e]]}
-
-
 // load
 .aq.load:{[fileh;sep;destnm]
   data:(upper exec t from meta destnm;enlist sep) 0:hsym fileh;
   destnm upsert data
   }
-.aq.save:{[fileh;sep;t] fileh 0:sep 0:t}
+.aq.save:{[fileh;sep;t] fileh 0:sep 0:t};
 
 .aq.insert:{[tnm;sorted;modifier;src]
   ctnm:cols tnm;
@@ -153,6 +146,14 @@ k).aq.ejix:{(=x#z:0!z)x#y:0!y};
   tnm set sorted upsert d
   };
 
+// case expression
+.aq.else:{$[0=count x;first 0#y;x]};
+// explicit conditions
+.aq.eCond:{[ct;e] ?[ct[0;0]; ct[0;1]; $[1=count ct; .aq.else[e; ct[0;1]]; .z.s[1_ct;e]]]};
+// implicit conditions
+.aq.searchedCond:{[v;ct;e] .aq.eCond[flip (eval each (=;v; ) each first fct; last fct:flip ct); e]};
+// wrapper
+.aq.cond:{[v;ct;e] $[0=count v; .aq.eCond[ct;e]; .aq.searchedCond[v;ct;e]]}
 
 
 // Builtins
@@ -170,7 +171,7 @@ k).aq.ejix:{(=x#z:0!z)x#y:0!y};
 .aq.deltas:deltas;
 .aq.distinct:distinct;
 .aq.drop:_;
-.aq.enlist:enlist;
+.aq.list:{$[0<=type x;x;enlist x]};
 .aq.exec_arrays:{show {key[x] set'value x}flip 0!x;x};
 .aq.flatten:ungroup;
 .aq.fill:^;
