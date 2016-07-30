@@ -60,7 +60,9 @@ object FunctionInfo {
     new BuiltInSummary("OR", { case v @ x :: y :: xs if v.forall(_.consistent(bool)) => TBoolean }, false, false, false),
     new BuiltInSummary("PRD", boolOrNum_Num, false, true, true),
     new BuiltInSummary("SQRT", num_Num, false, false, false),
-    new BuiltInSummary("SUM",  num_Num orElse bool_Num, false, true, true)
+    new BuiltInSummary("SUM",  num_Num orElse bool_Num, false, true, true),
+    new BuiltInSummary("SHOW", { case x => TUnit }, false, false, false),
+    new BuiltInSummary("LIST", { case x :: xs => TUnknown }, false, false, false)
   )
 
   def odBuiltIn(s: String, sig: Sig): BuiltInSummary = new BuiltInSummary(s, sig, true, false, true)
