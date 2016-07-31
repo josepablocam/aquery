@@ -49,7 +49,15 @@ class ParserTestSuite extends FunSuite {
 
   def parseResource(resource: String): Boolean = {
     val prog = Source.fromURL(getClass.getResource(resource)).getLines.mkString("\n")
-    AqueryParser(prog).successful
+    AqueryParser(prog) match {
+      case Success(_, _) => true
+      case Failure(msg, _) =>
+        println(msg)
+        false
+      case Error(msg, _) =>
+        println(msg)
+        false
+    }
   }
 
   // expressions
@@ -109,6 +117,17 @@ class ParserTestSuite extends FunSuite {
     val q = Query(Nil, Project(Table("t1", None), (WildCard, None) :: Nil))
     val c2E = Create("t", Right(q))
     assert(expectParse(create, c2S)(Some(c2E == _)), "create with query")
+  }
+
+  test("io") {
+    val saveS = """ SELECT * FROM t INTO OUTFILE "my_test_file.csv" FIELDS TERMINATED BY "," """
+    val saveE =
+      Save("my_test_file.csv", Query(Nil, Project(Table("t"), (WildCard, None) :: Nil)), ",")
+    assert(expectParse(io, saveS)(Some(saveE == _)))
+
+    val loadS = """ LOAD DATA INFILE "my_test_file.csv" INTO TABLE t2 FIELDS TERMINATED BY "," """
+    val loadE = Load("my_test_file.csv", "t2", ",")
+    assert(expectParse(io, loadS)(Some(loadE == _)))
   }
 
   test("update") {
