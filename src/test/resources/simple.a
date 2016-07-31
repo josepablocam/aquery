@@ -1,14 +1,22 @@
 /*
-    This represents an adaption of the Aquery thesis/presentation examples to accomodate
-    limitations in the aquery to q compiler (as of 05/17/15). The exact limitations
-    are outlined in the accompanying "The Good, the Bad, and the Ugly" paper.
-
-    We note which examples are completely unchanged (and modulo column naming, should correspond
-    to the desired results )
+    This represents an adaption of the Aquery thesis/presentation examples.
 */
 
 
-
+// loading data
+<q>
+n:`int$1e6;
+Ticks:([]ID:n?`S`ACME`OTHER`CORP; date:n?.z.D; timestamp:n?.z.P; price:n?100.0);
+pointDate:first 1?Ticks`date;
+Ticks:`date`ID xasc Ticks;
+TicksWithAttr:update ID:`g#asc ID from Ticks;
+Portfolio:([]ID:`S`ACME`OTHER`CORP; position:1e4+4?1e6);
+Packets:select from ([]src:n?100; dest:n?100; length:n?256; timestamp:.z.P+10*n?`int$1e9) where src<>dest;
+Sales:update sales:count[i]?1e6 from ([]month:`month${neg[x]?x}1+`long$`month$.z.D);
+TradedStocks:([]ID:n?`S`ACME`OTHER`CORP; date:n?.z.D);
+HistoricQuotes:update ClosePrice:count[i]?100. from `ID`date xcol distinct TradedStocks;
+base:([] ID:(count .Q.a)?`S`ACME`OTHER`CORP; name:`$'.Q.a)
+</q>
 
 
 
@@ -24,26 +32,27 @@ WHERE ID = "ACME"
 
 /* UNCHANGED */
 /* pg 25, example 3.1 */
-SELECT max(price - mins(price))
+SELECT max(price - mins(price)) as max_profit
 FROM Ticks
     ASSUMING ASC timestamp
 WHERE ID="ACME" AND
-    date = '05/11/2003'
+    date = pointDate
 
 
 /* MODIFIED:
     1 - convert 120 to nanoseconds
 */
 /* pg 29, example 3.3 */
-SELECT src, dest, avg(length), count(timestamp)
+SELECT src, dest, avg(length) as len, count(timestamp) as ct
 FROM Packets
     ASSUMING ASC src, DESC dest, ASC timestamp
 GROUP BY src, dest, sums(deltas(timestamp) > (120 * 1000000000))
 
 /* MODIFIED:
     - note that since we decided that aquery should treat selections as a sequence
-     (as order of selections matters given the semantics of inter-row dependence produced by column-wise aggregates), I've modified this example to use & rather than AND, as & does break up our selection into a sequence, but rather tells aquery to treat it as 1 expression (similar to & vs , in q where clauses)
-    - I explicitly included timestamp in the projections for the temp table (averages), since i haven't yet implemented a way to add the group-bys automatically to the projections
+     (as order of selections matters given the semantics of inter-row dependence produced by column-wise aggregates),
+     I've modified this example to use & rather than AND, as & does break up our selection into a sequence, but rather tells
+     aquery to treat it as 1 expression (similar to & vs , in q where clauses)
      */
 /* pg 30, example 3.4 */
 WITH
@@ -63,7 +72,7 @@ WITH
     1 - changed Ticks t, Portfolio p to Ticks t INNER JOIN Portfolio p USING ID
 */
 /* pg 32, example 3.5 */
-SELECT t.ID, last(10, price)
+SELECT t.ID as ID, last(10, price) as last_price
 FROM Ticks t INNER JOIN Portfolio p USING ID
     ASSUMING ASC timestamp
 GROUP BY t.ID
@@ -71,8 +80,6 @@ GROUP BY t.ID
 /* MODIFIED:
  1 - added explicit names to the projections in the
  temporary table
- 2 - replaced count(*) with count(ID), ROWID is translated to i, and i when grouped is just 1 per group...need to fix this
- 3 - add first to ID to avoid vector after group by
 */
 /* pg 33, example 3.6 */
 WITH
@@ -80,19 +87,12 @@ WITH
     (SELECT ID as ID, price as price, timestamp as timestamp
      FROM Ticks
         ASSUMING ASC timestamp
-     WHERE date = '05/11/2003')
- SELECT ID, count(ID)
+     WHERE date = pointDate)
+ SELECT ID, count(timestamp) as ct
  FROM OneDay
     ASSUMING ASC timestamp
     WHERE ROWID < 1000
     GROUP BY ID
-
-/* REPEATED */
-/* pg 35 */
-//SELECT first(src), first(dest), avg(length), count(timestamp)
-//FROM Packets
-//    ASSUMING ASC src, DESC dest, ASC timestamp
-//GROUP BY src, dest, sums(deltas(timestamp) > 120)
 
 /**********************************************************
 ***********Examples from aquery presentation notes*********
@@ -100,43 +100,15 @@ WITH
 
 /* UNCHANGED */
 /* moving average over arrables*/
-SELECT month, avgs(3, sales)
+SELECT month, avgs(3, sales) as moving_sales
 FROM Sales
 ASSUMING ASC month
-
-/* REPEATED */
-/* best profit query comparison */
-//SELECT max(price - mins(price))
-//FROM Ticks
-//    ASSUMING ASC timestamp
-//WHERE ID="S"
-//AND tradeDate='01/10/2003'
-
-/* REPEATED */
-/* network management query revisited */
-//SELECT first(src), first(dest), count(ROWID), avg(len)
-//FROM Packets
-//    ASSUMING ASC src, DESC dest, ASC time
-//GROUP BY src, dest, sums(deltas(time) > 120)
-
-
-
-/* Interchange sorting + order preserving operators */
-//SELECT ts.ID, avgs(10, hq.ClosePrice)
-//FROM TradedStocks AS ts INNER JOIN
-//    HistoricQuotes AS hq
-//	ON ts.ID=hq.ID AND ts.TradeDate=hq.date note use of ON given differing col names
-//ASSUMING ASC hq.TradeDate
-//GROUP BY Id
-
 
 /* MODIFIED:
  1 - replaced INNER JOIN ON with INNER JOIN USING (which means I have also renamed
     the columns as necessary
- - the original query is found above (commented-out)
 */
-
-SELECT ID, avgs(10, hq.ClosePrice)
+SELECT ID, avgs(10, hq.ClosePrice) as avg_price
 FROM TradedStocks AS ts INNER JOIN
     HistoricQuotes AS hq
 	USING (ID, date)
@@ -146,41 +118,71 @@ GROUP BY ID //can use ID since both ts and hq have it and joined using (ts.ID = 
 
 /* MODIFIED: replaced Ticks t, base b with t inner join b using ID
 /* last price for a name query */
-
-SELECT last(price)
+SELECT last(price) as last_price
 FROM Ticks t INNER JOIN base b USING ID
     ASSUMING ASC name, ASC timestamp
 WHERE name = "x"
+
+// Testing push filters (TicksWithAttr.ID has attribute, and we test a non-equality selection)
+SELECT ID, date, timestamp, price from TicksWithAttr t INNER JOIN Portfolio p USING ID WHERE ROWID < 1000
 
 /**********************************************************
 ***********Miscellaneous Aquery Examples**********
 **********************************************************/
 
-
-
-/* simple function definition */
-FUNCTION myfunction(x,y) { x + y }
-
 /* function definition with local variables */
 FUNCTION pythag(x, y) {
-    sqr_x := x * x;
-    sqr_y := y * y;
-    sqrt(sqr_x + sqr_y)
-}
+   sqr_x := x * x;
+   sqr_y := y * y;
+   sqrt(sqr_x + sqr_y)
+ }
 
+<q>.aq.q10:{pythag(3,4)}</q>
 
-// Testing push filters (TicksWithAttr.ID has attribute, and we test a non-equality selection)
-SELECT * from TicksWithAttr t INNER JOIN Portfolio p USING ID WHERE t.ixCol < 1000
+<q>
+t1:([]c1:1 2 3; c2:10 20 30);
+t2:([]c1:100 200 300; c2:1000 2000 3000);
+tu1:([]c1:1 1 1 2 2 3 4 4; c2:10 10 20 30 30 60 70 80);
+tu2:([]c1:100 -100 200 300; c2:20 30 10 40);
+</q>
 
-//INSERTIONS
-INSERT INTO t1 assuming asc c1 select * from t2
-INSERT INTO t1(c2, c1) VALUES(-1, -2)
+// inserts
+CREATE TABLE aq_t1(c1 INT, c2 INT)
 
-//UPDATES
-UPDATE tu1 SET c3 = last(sums(c2)) ASSUMING ASC c2 WHERE c1 < 3 GROUP BY c1, c2 HAVING count(c2) >= 2
+INSERT INTO aq_t1 ASSUMING ASC c1
+  SELECT * FROM t2
 
-UPDATE tu2 SET c3 = max(c2) WHERE c1 > 0
+INSERT INTO aq_t1(c2, c1) VALUES(-1, -2)
 
-//DELETES
-DELETE FROM td1 ASSUMING ASC c2 where c1 < 3 group by c1 having count(c2) > 1
-DELETE c2 FROM td2
+SELECT * FROM aq_t1
+
+// updates
+CREATE TABLE aq_tu1
+  SELECT * FROM tu1
+
+UPDATE aq_tu1 SET c3 = last(sums(c2))
+ASSUMING ASC c2
+WHERE c1 < 3 GROUP BY c1, c2 HAVING count(c2) >= 2
+
+SELECT * FROM aq_tu1
+
+CREATE TABLE aq_tu2
+  SELECT * FROM tu2
+
+UPDATE aq_tu2 SET c3 = max(c2) WHERE c1 > 0
+
+SELECT * FROM aq_tu2
+
+// deletes
+CREATE TABLE aq_td1
+  SELECT * FROM tu1
+
+DELETE FROM aq_td1 ASSUMING ASC c2 where c1 < 3 group by c1 having count(c2) > 1
+SELECT * FROM aq_td1
+
+CREATE TABLE aq_td2
+  SELECT * FROM tu2
+
+DELETE c2 FROM aq_td2
+
+SELECT * FROM aq_td2

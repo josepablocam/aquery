@@ -1,13 +1,3 @@
-// Loading in data and tables using verbatim q
-<q>
-\l load_data.q
-getMonth:{1 + (`month$x) mod 12}
-getYear:{`year$x}
-firstDateOfYear:{`date$`month$d-30*-1+getMonth d:`date$`month$x}
-getWeek:{1 + floor (x - firstDateOfYear x)%7}
-</q>
-
-
 
 /*
 ********* QUERY 0 ****************
@@ -378,5 +368,7 @@ WITH
       group by Id, getYear(AnnounceDate) as year
     )
 
-    select Id, year, avg_px, total_divs, total_divs / avg_px as yield
+    select Id, year,
+    float(avg_px) as avg_px, float(total_divs) as total_divs,
+    float(total_divs / avg_px) as yield
     FROM nosplit_avgpx INNER JOIN divdata USING (Id, year)

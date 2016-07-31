@@ -3,14 +3,21 @@ import edu.nyu.aquery.Aquery
 import java.io.{File, PrintWriter}
 import java.io.File.createTempFile
 
-import org.scalatest.FunSuite
+import org.scalatest.{Ignore, FunSuite}
 
+import scala.io.Source
 import scala.sys.process._
 
 /**
  * All tests here focus on making sure the result of running the code is the same as if
  * we wrote equivalent q code. We don't test the exact form of the code generated, as this
- * is likely to change throughout time
+ * is likely to change throughout time.
+ *
+ * If a test requires any data or pre-defined functions, these should be added to the aquery code
+ * (wrapped in <q> </q> if necessary), as this is run first in the q test harness (runner.q).
+ *
+ * To run these tests, you need q in your PATH, so that Scala can launch an external q process
+ * for each test.
  */
 class KdbGeneratorTestSuite extends FunSuite {
   // q script that wraps running tests
@@ -49,6 +56,13 @@ class KdbGeneratorTestSuite extends FunSuite {
     (tfile, qfile)
   }
 
+  // read code from a file
+  def getCode(f: String): String = {
+    val file = getClass.getResource(f).getFile
+    Source.fromFile(file).getLines().mkString("\n")
+  }
+
+  // run code using external q process
   def run(acode: String, qcode: String, test: String, optimize: Boolean): (Boolean, String)= {
     val (afile, qfile) = toFiles(acode, qcode, optimize)
     val c = cmd(afile.getAbsolutePath, qfile.getAbsolutePath, test)
@@ -126,6 +140,63 @@ class KdbGeneratorTestSuite extends FunSuite {
     assert(passed1, "optimized: " + msg1)
   }
 
+  test("insert") {
+    val acode =
+      """
+         <q> base:([]c2:1 2 3 4; c3:100 200 300 400) </q>
+         CREATE TABLE t (c1 INT, c2 INT, c3 STRING)
+         INSERT INTO t VALUES(1, 2, "c")
+         INSERT INTO t VALUES(10, 20, "C")
+         INSERT INTO t(c1, c2, c3)
+          SELECT c2, c2, "this is a test" from base
+
+         SELECT * FROM t
+      """
+    val qcode =
+      """
+        .kdb.q0:{
+          t:([]c1:`long$(); c2:`long$(); c3:`$());
+          t:t upsert (1;2;`c);
+          t:t upsert (10;20;`C);
+          t:t upsert select c1:c2, c2, c3:`$"this is a test" from base;
+          t
+          }
+      """
+
+    val tests = "q0"
+    val (passed0, msg0) = run(acode, qcode, tests, optimize = false)
+    assert(passed0, "basic: " + msg0)
+
+    val (passed1, msg1) = run(acode, qcode, tests, optimize = true)
+    assert(passed1, "optimized: " + msg1)
+  }
+
+  test("load/save") {
+    val acode =
+      """
+         CREATE TABLE t (c1 INT, c2 INT, c3 STRING)
+         INSERT INTO t VALUES(1, 2, "c")
+         INSERT INTO t VALUES(10, 20, "C")
+
+         SELECT * FROM t
+         INTO OUTFILE "my_test_file.csv" FIELDS TERMINATED BY ","
+
+         CREATE TABLE t2(c1 INT, c2 INT, c3 STRING)
+         LOAD DATA INFILE "my_test_file.csv"
+         INTO TABLE t2 FIELDS TERMINATED BY ","
+
+        <q> .aq.q0:{t2}; system "rm -f my_test_file.csv" </q>
+      """
+    val qcode = ".kdb.q0:{t}"
+
+    val tests = "q0"
+    val (passed0, msg0) = run(acode, qcode, tests, optimize = false)
+    assert(passed0, "basic: " + msg0)
+
+    val (passed1, msg1) = run(acode, qcode, tests, optimize = true)
+    assert(passed1, "optimized: " + msg1)
+  }
+
   test("update/delete") {
     val acode =
       """
@@ -193,19 +264,56 @@ class KdbGeneratorTestSuite extends FunSuite {
     assert(passed1, "optimized: " + msg1)
   }
 
-  ignore("simple.a") {
-    // TODO
+  test("simple.a") {
+    val acode = getCode("simple.a")
+    val qcode = getCode("q/simple.q")
+
+    val tests = "q0,q1,q2,q3,q4,q5,q6,q7,q8,q9"
+    val (passed0, msg0) = run(acode, qcode, tests, optimize = false)
+    assert(passed0, msg0)
+
+    val (passed1, msg1) = run(acode, qcode, tests, optimize = true)
+    assert(passed1, msg1)
   }
 
-  ignore("fintime.a") {
-  // TODO
+  test("fintime.a") {
+    // need a bit more work here to get path to data
+    val load = getCode("q/load_fintime.q")
+    val dataPath = getClass.getResource("data/").getFile
+    val fullLoad = s"""<q>\nDATAPATH:"$dataPath";\n$load\n</q>"""
+    // extend aquery code with data loading
+    val acode = fullLoad + "\n" + getCode("fintime.a")
+    val qcode = getCode("q/fintime.q")
+
+    val tests = "q0,q1,q2,q3,q4,q5,q6,q7,q8,q9"
+    val (passed0, msg0) = run(acode, qcode, tests, optimize = false)
+    assert(passed0, msg0)
+
+    val (passed1, msg1) = run(acode, qcode, tests, optimize = true)
+    assert(passed1, msg1)
   }
 
-  ignore("monetdb.a") {
-  // TODO
+  test("monetdb.a") {
+    val acode = getCode("monetdb.a")
+    val qcode = getCode("q/monetdb.q")
+
+    val tests = "q0,q1"
+    val (passed0, msg0) = run(acode, qcode, tests, optimize = false)
+    assert(passed0, "basic: "  + msg0)
+
+    val (passed1, msg1) = run(acode, qcode, tests, optimize = true)
+    assert(passed1, "optimized: " + msg1)
   }
 
-  ignore("pandas.a") {
-  // TODO
+  test("pandas.a") {
+    val acode = getCode("pandas.a")
+    val qcode = getCode("q/pandas.q")
+
+    val tests = "q0,q1,q2,q3,q4,q5,q6"
+    val (passed0, msg0) = run(acode, qcode, tests, optimize = false)
+    assert(passed0, "basic: "  + msg0)
+
+    val (passed1, msg1) = run(acode, qcode, tests, optimize = true)
+    assert(passed1, "optimized: " + msg1)
   }
 }
