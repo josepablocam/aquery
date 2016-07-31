@@ -35,7 +35,7 @@ class KdbGenerator extends BackEnd {
   // Encapsulates the environment for purposes of code generation
   case class CodeState(
     queryId: Int = 0,           // identifier for queries (kdb functions wrap a query): .aq.qX
-    tableId: Int = 0,           // identifier for temp tables: .aq.tX
+    tableId: Int = 0,           // identifier for temp tables: aq__tX
     currTable: String = "",     // current table name (otherwise can be taken from tableId)
     grouped: Boolean = false,   // if plan has generated code for a group-by (so must modify)
     nameAsVar: Boolean = false, // treat an Id/name as a variable name, not a column lookup
@@ -52,7 +52,7 @@ class KdbGenerator extends BackEnd {
   // need to add each modifiers when grouped
   val isGrouped: CodeEnvOp[Boolean] = SimpleState.read(_.grouped)
   val setGrouped: CodeEnvOp[Unit] = SimpleState.modify(_.copy(grouped = true))
-  val remGrouped: CodeEnvOp[Unit]  = SimpleState.modify(_.copy(grouped = false))
+  val remGrouped: CodeEnvOp[Unit] = SimpleState.modify(_.copy(grouped = false))
   // need to know current table
   def setCurrTable(s: String): CodeEnvOp[Unit] = SimpleState.modify(_.copy(currTable = s))
   val getCurrTable: CodeEnvOp[String] = SimpleState.read(_.currTable)
@@ -74,10 +74,15 @@ class KdbGenerator extends BackEnd {
   val renameCols: CodeEnvOp[Boolean] = SimpleState.read(_.renameCols)
   val setRenameCols: CodeEnvOp[Unit] = SimpleState.modify(_.copy(renameCols = true))
 
-  // the only thing that needs to be carried between queries is the query id
-  val cleanUpEnv: CodeEnvOp[Unit] =
+  // the only thing that needs to be carried between top-level constructs is the query id
+  val cleanTopEnv: CodeEnvOp[Unit] =
     SimpleState.modify(e => CodeState().copy(queryId = e.queryId))
 
+  // only thing that needs to be carried btwn local queries (and main) is query id and table id
+  val cleanQueryEnv: CodeEnvOp[Unit] =
+    SimpleState.modify(e => CodeState().copy(queryId = e.queryId, tableId = e.tableId))
+
+  // initializes query state on the q side
   val initQueryState: String = " .aq.initQueryState[];"
 
   /**
@@ -114,7 +119,6 @@ class KdbGenerator extends BackEnd {
   : String =
     kdbFunctional("?", t, w, b, p)
 
-
   /**
    * Wrapper for kdb update statement
    * @param t
@@ -127,7 +131,6 @@ class KdbGenerator extends BackEnd {
   : String =
     kdbFunctional("!", t, w, b, p)
 
-
   /**
    * Wrapper for a kdb exec statement ?[t;w;();p]
    * @param t table
@@ -137,7 +140,6 @@ class KdbGenerator extends BackEnd {
    */
   def kdbExec(t: Option[String], w: Option[String], p: Option[String]): String =
     kdbSelect(t, w, Some("()"), p)
-
 
   /**
    * Wrapper for kdb delete c1,...., c2 from t (column-wise deletion)
@@ -169,13 +171,11 @@ class KdbGenerator extends BackEnd {
    */
   def kdbBool(b: Boolean): String = if (b) "1b" else "0b"
 
-
   // An empty kdb list
   val kdbEmptyList: CodeGen = SimpleState.unit("()")
 
-
   /**
-   * Generate kdb code for a list of elements, sep separated. Must be wrapper in ()
+   * Generate kdb code for a list of elements, sep separated. Must be wrapped in ()
    * as needed.
    * @param es list of elements
    * @param sep separator
@@ -189,7 +189,7 @@ class KdbGenerator extends BackEnd {
   /**
    * Generate kdb code for a dictionary of expressions
    * @param es list of tuples of expression and key
-   * @param fk and optional function to apply to the key defaults to just f(x) = `$x
+   * @param fk and function to apply to the key
    * @return
    */
   def genExprDict(es: Seq[(Expr, String)], fk: String => String): CodeGen = es match {
@@ -201,7 +201,6 @@ class KdbGenerator extends BackEnd {
       genCodeList(values.toList, ";")(genExpr).map(vs => s"($keys)!($vs)")
     // if there is a wild card, we should generate each separately and then append
     case _ => genCodeList(es.toList.map(e => List(e)), ",")(genExprDict(_, fk))
-
   }
 
   /**
@@ -235,7 +234,7 @@ class KdbGenerator extends BackEnd {
    * @param wrap if true adds () around the result
    * @return
    */
-  def genExprList(es: Seq[Expr], wrap: Boolean): CodeGen =  es match {
+  def genExprList(es: Seq[Expr], wrap: Boolean): CodeGen = es match {
     case Nil => kdbEmptyList
     case x :: xs =>
       val ge = genCodeList(es.toList, ";")(genExpr)
@@ -331,13 +330,6 @@ class KdbGenerator extends BackEnd {
   }
 
   /**
-   * Get the table name corresponding to an id
-   * @param id
-   * @return
-   */
-  def getTableName(id: Int): String = ".aq.t" + id
-
-  /**
    * Generate code for a table expression. For wildcard we generate code that creates a
    * dictionary of columns to use in a projection.
    * @param t
@@ -406,7 +398,7 @@ class KdbGenerator extends BackEnd {
       as <- args;
       g <- isGrouped
     ) yield {
-      val cleanF = if (g) s"$f each" else f
+      val cleanF = if (g) s"$f'" else f
       val cleanAs = if (variadic) addEnlist(as) else as
       s"($cleanF;$cleanAs)"
     }
@@ -462,7 +454,7 @@ class KdbGenerator extends BackEnd {
    * @return
    */
   def genTempTableName(): CodeGen =
-    for(id <- getTableId; _ <- incrTableId) yield ".aq.t" + id
+    for(id <- getTableId; _ <- incrTableId) yield "aq__t" + id
 
   /**
    * Generate initialization code for a table
@@ -638,15 +630,15 @@ class KdbGenerator extends BackEnd {
   }
 
   def genOrderTuples(os: List[(OrderDirection, Expr)]): CodeGen = {
-    // rewrite as function call, easiest way to take advantage of existing combinators
+    // rewrite as function call, easiest way to take advantage of existing code generators
     val rewritten = os.map { case (d, c) => FunCall(getOrderDirection(d), List(c)) }
     // don't want each modifier on functions here, since we apply the sorting
-    // on a per-group basis already (i.e. there is a top-level each
+    // on a per-group basis already (i.e. there is a top-level each in the sorting call)
     for(
-      s <- SimpleState.read(identity[CodeState]);
+      s <- SimpleState.get;
       _ <- remGrouped;
       order <- genExprList(rewritten, wrap = true);
-      _ <- SimpleState.modify[CodeState](_ => s)
+      _ <- SimpleState.set(s)
     ) yield order
   }
 
@@ -686,8 +678,8 @@ class KdbGenerator extends BackEnd {
 
   /**
    * Generate code to relabel columns in a table
-   * @param cols
-   * @param t
+   * @param cols columns to rename to
+   * @param t table name
    * @return
    */
   def genRelabelCols(cols: List[String], t: String): String = cols match {
@@ -697,7 +689,7 @@ class KdbGenerator extends BackEnd {
 
   /**
    * Generate code for a local query
-   * @param l
+   * @param l local query
    * @return
    */
   def genLocalQuery(l: (String, List[String], RelAlg)): CodeGen = l match {
@@ -707,12 +699,14 @@ class KdbGenerator extends BackEnd {
 
   /**
    * Generate code for a relational algebra plan (reinitializes query state before new code)
-   * @param plan
-   * @param f
+   * @param plan plan to generate code for
+   * @param f function to apply to final result table (can be identity just to return, or can
+   *          be used for further processing)
    * @return
    */
   def genPlan(plan: RelAlg, f: String => String): CodeGen =
     for(
+      _ <- cleanQueryEnv;
       code <- genRelAlg(plan);
       t <- getCurrTable
     ) yield s"$initQueryState\n$code\n ${f(t)}"
@@ -786,7 +780,8 @@ class KdbGenerator extends BackEnd {
     "([]"+ ls.map{ case (c, t) => s"""$c:"${getTypeCode(t)}"$$()"""}.mkString(";") +")"
 
   /**
-   * Get the appropriate kdb type code
+   * Get the appropriate kdb type code. Note that ints get mapped to longs, which are default
+   * in newer kdb+ (using version KDB+ 3.3 2015.11.03 for this)
    * @param t
    * @return
    */
@@ -806,10 +801,10 @@ class KdbGenerator extends BackEnd {
    */
   def genDataIO(io: DataIO): CodeGen = io match {
     case Load(file, table, sep) =>
-      SimpleState.unit(s""".aq.show .aq.load[${getFileHandle(file)};$sep;${kdbSym(table)}];""")
+      SimpleState.unit(s""".aq.show .aq.load[${getFileHandle(file)};"$sep";${kdbSym(table)}];""")
     case Save(file, q, sep) =>
       for (query <- genQuery(q)) yield
-        s".aq.show .aq.save[${getFileHandle(file)};$sep; ] {\n $query\n }[];"
+        s""".aq.show .aq.save[${getFileHandle(file)};"$sep"; ] {\n $query\n }[];"""
   }
 
   /**
@@ -878,8 +873,11 @@ class KdbGenerator extends BackEnd {
         ) yield {
           val gClean = if (cleanGroups.nonEmpty) Some(g) else None
           having match {
+            // if there is no having clause, we can handle in a single kdb update op
             case Nil =>
               s".aq.show ${kdbSym(t)} set {\n$init\n ${kdbUpdate(Some(sortedT), Some(w), gClean, Some(s))}\n }[];"
+            // if there is a having, we need to use a helper to solve for indices that need
+            // to be updated, and pass this to an update op
             case _ =>
               s".aq.show ${kdbSym(t)} set {\n$init\n$ix\n\n ${
                 kdbUpdate(Some(sortedT), Some("enlist " + vectorName), gClean, Some(s))
@@ -912,7 +910,10 @@ class KdbGenerator extends BackEnd {
           ix <- genBooleanVector(sortedT, fs, groupby, having, vectorName)
         ) yield {
           having match {
+            // if there is no having clause, we can handle in a single kdb delete op
             case Nil => s".aq.show ${kdbSym(t)} set {\n$init\n ${kdbDeleteWhere(sortedT, w)}\n }[];"
+            // if there is a having, we need to use a helper to solve for indices that need
+            // to be deleted, and pass this to a delete op
             case _ => s".aq.show ${kdbSym(t)} set {\n$init\n$ix\n\n ${
               kdbDeleteWhere(sortedT, "enlist " + vectorName)
             }\n }[];"
@@ -937,11 +938,14 @@ class KdbGenerator extends BackEnd {
     group: List[Expr],
     having: List[Expr],
     vec: String): CodeGen = {
+      // remove all group names, we want all cols to be grouped so that having expressions
+      // eval as expected
       val cleanGroups: List[(Expr, Option[String])] = group.map((_, None))
-      // collect all columns, add vecResult column
-      val project: List[(Expr, Option[String])] =
-        List((WildCard, None), (RowId, Some(vec)))
+      // collect all columns, add vecResult column (which just masks virtual index col)
+      val project: List[(Expr, Option[String])] = List((WildCard, None), (RowId, Some(vec)))
       val query = GroupBy(Filter(Project(Table(sortedT), project), where), cleanGroups, having)
+      // based on indices that return from query, assign true to those locations, false to others
+      // this vector can then be used to perform update/delete ops by applying `where` to it
       val assignToIndex =
         (res: String) => s" $vec:@[(count $sortedT)#0b;(ungroup 0!$res)${kdbSym(vec)};:;1b]"
       val cleanState = " .aq.initQueryState[];"
@@ -962,7 +966,7 @@ class KdbGenerator extends BackEnd {
    */
   def genTopLevel(t: TopLevel): CodeGen = t match {
     case q: Query =>
-      for(
+      for (
         id <- getQueryId;
         _ <- incrQueryId;
         code <- genQuery(q)
@@ -998,7 +1002,7 @@ class KdbGenerator extends BackEnd {
     val translator = for (
       prelude <- getPrelude;
       msg <- SimpleState.unit("// Translation begins here");
-      code <- genCodeList(prog.toList, "\n\n")(e => for (_ <- cleanUpEnv; c <- genTopLevel(e)) yield c)
+      code <- genCodeList(prog.toList, "\n\n")(e => for (_ <- cleanTopEnv; c <- genTopLevel(e)) yield c)
     ) yield s"$prelude\n$msg\n$code\n"
     // generate code with initially clean state
     translator(CodeState())._2
