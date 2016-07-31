@@ -75,11 +75,11 @@
 
 .aq.joinUsing:{[jf;l;r;cs]
   // join using information
-  jui:raze each flip .aq.joinUsingPrep[cols[.aq.t1],cols .aq.t2;] each (),cs;
+  jui:raze each flip .aq.joinUsingPrep[cols[l],cols r;] each (),cs;
   // remap column references
-  .aq.cd,:.aq.jui`remap;
-  l:.aq.drcols[l;.aq.jui`rename];
-  r:.aq.drcols[r;.aq.jui`rename];
+  .aq.cd,:jui`remap;
+  l:.aq.drcols[l;jui`rename];
+  r:.aq.drcols[r;jui`rename];
   jf[.aq.cd cs;l;r]
  }
 
@@ -142,7 +142,7 @@ k).aq.ejix:{(=x#z:0!z)x#y:0!y};
   ctnm:cols tnm;
   if[(0 < count modifier) & count[modifier]<>count ctnm;'"explicitly state all cols"];
   l:$[0 < count modifier; modifier; ctnm];
-  d:$[0h=type src;l!src;l xcol src];
+  d:$[98<=type src;l xcol src;l!src];
   tnm set sorted upsert d
   };
 
@@ -165,7 +165,7 @@ k).aq.ejix:{(=x#z:0!z)x#y:0!y};
 .aq.avg:avg;
 .aq.avgs1:avgs;
 .aq.avgs2:mavg;
-.aq.between:within;
+.aq.between:{x within (y;z)};
 .aq.concatenate:(upsert/);
 .aq.count:count;
 .aq.deltas:deltas;
