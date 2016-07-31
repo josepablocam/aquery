@@ -174,9 +174,9 @@ object AqueryParser extends StandardTokenParsers with PackratParsers {
 
   // An AQuery program is a non-empty list of top-level constructs
   def program: Parser[List[TopLevel]] =
-    rep1(fullQuery
+    rep1(io
+        |fullQuery
         | verbatim
-        | io
         | udf
         | delete
         | update
