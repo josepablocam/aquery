@@ -49,6 +49,20 @@ class OrderAnalysis(info: FunctionInfo) {
    */
   def hasOrderDependence(fname: String): Boolean = info(fname).map(_.orderDependent).getOrElse(true)
 
+
+  def usesAggregate(e: Expr): Boolean = e match {
+    case FunCall(f, args) => usesAggregate(f) || args.exists(usesAggregate)
+    case _ => e.children.exists(usesAggregate)
+  }
+
+  def usesAggregate(fname: String): Boolean = info(fname).map(_.usesAggregate).getOrElse(true)
+
+  def usesAggregate(udf: UDF): Boolean =
+    udf.cs.exists {
+      case Right(e) => usesAggregate(e)
+      case Left(Assign(_, e)) => usesAggregate(e)
+    }
+
   /**
    * Determines if a user defined function removes order-dependence upon output. Removing
    * order-dependence means that the result of the function can be freely combined with non-sorted
@@ -299,7 +313,17 @@ object OrderAnalysis {
       val analyzer = new OrderAnalysis(s)
       val orderDependent = analyzer.hasOrderDependence(f)
       val remsOrderDependence = analyzer.removesOrderDependence(f)
-      s.write(f.n, new UDFSummary(f.n, { case _ => TUnknown }, orderDependent, remsOrderDependence))
+      val usesAggregate = analyzer.usesAggregate(f)
+      s.write(
+        f.n,
+        new UDFSummary(
+          f.n,
+          {case _ => TUnknown},
+          orderDependent,
+          remsOrderDependence,
+          usesAggregate
+        )
+      )
     }
     // environment is collected sequentially
     val funs = prog.collect { case f: UDF => f }

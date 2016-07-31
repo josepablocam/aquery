@@ -1,5 +1,17 @@
 <q>
-\l load_data.q
+nr:10000;
+nc:10;
+randf:{x?1000.0};
+df_frame:flip (`$"c",/:string til nc)!flip (nr;nc)#randf nr * nc;
+bool_arr:nr?01b;
+df_groupby:([]key1:nr?`A`B`C; key2:nr?`one`two; value1:randf nr; value2:randf nr; value3:randf nr);
+s_value_counts:([] val:`int$randf nr);
+df_groupby_multi_python:([] key1:nr?10; key2:nr?10; data1:randf nr; data2:randf nr);
+mdf1:df_frame;
+mdf2:df_frame;
+df_multi_join:update A:randf nr, B:randf nr, C:randf nr, D:randf nr from delete data1, data2 from df_groupby_multi_python;
+df_join:df_groupby_multi_python;
+s_std:([]val:randf nr);
 </q>
 
 /*
@@ -24,7 +36,7 @@ from df_groupby group by key1, key2
 # series_value_counts_int64                                           #
 #######################################################################
 */
-select val, count(val) as ct from s_value_counts group by val
+select kval as val, count(val) as ct from s_value_counts group by val as kval
 
 /*
 #######################################################################

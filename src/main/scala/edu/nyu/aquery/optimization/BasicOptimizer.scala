@@ -68,18 +68,8 @@ class BasicOptimizer(val input: Seq[TopLevel] = Nil, val optims: Seq[String] = N
   val optimizePlan = makeOptimizationBatch(optims)
 
   /**
-   * An expression is considered "movable" if moving it does not change the semantics of
-   * the overall construct it is used in. This is the case for expressions that do not have order
-   * dependence or remove order dependence. This stems from their lack of "inter-row" dependencies.
-   * @param e
-   * @return
-   */
-  def movable(e: Expr) =
-    !orderAnalyzer.hasOrderDependence(e) && !orderAnalyzer.removesOrderDependence(Map(), e)
-
-  /**
    * Apply a filter before a sort-by, by extracting all selections up to first
-   * intra-row dependent expression. Selections prior to that can be applied before sort
+   * order-dependent selection. Selections prior to that can be applied before sort
    * and are thus pushed below, while all remaining selections are applied after the sort
    * @param r
    * @return
@@ -87,8 +77,8 @@ class BasicOptimizer(val input: Seq[TopLevel] = Nil, val optims: Seq[String] = N
   def filterBeforeSort(r: RelAlg): RelAlg = {
     val optim: PartialFunction[RelAlg, RelAlg] = {
       case orig @ Filter(SortBy(src, order, _), fs, _) =>
-        // expressions with no intra-row dependencies are safe to execute before order
-        val (before, after) = fs.span(movable)
+        // expressions with no order dependencies are safe to execute before sort
+        val (before, after) = fs.span(!orderAnalyzer.hasOrderDependence(_))
         // need sort before anything can be filtered
         if (before.isEmpty)
           orig
@@ -178,7 +168,7 @@ class BasicOptimizer(val input: Seq[TopLevel] = Nil, val optims: Seq[String] = N
   /**
    * From a list of expression create a list of list of expressions, where expressions in each list
    * (functioning as selections) can be reordered but maintaining the overall semantics the same.
-   * This requires cutting along lines of movable vs non-movable expressions.
+   * This requires cutting along lines of expressions involving aggregates vs those that do not
    * @param exprs
    * @return
    */
@@ -186,10 +176,10 @@ class BasicOptimizer(val input: Seq[TopLevel] = Nil, val optims: Seq[String] = N
     def loop(left: Seq[Expr], curr: Seq[Expr], acc: Seq[Seq[Expr]]): Seq[Seq[Expr]] = left match {
       case Nil => if (curr.nonEmpty) curr.reverse +: acc else acc
       // not movable, should be its own list, reverse curr to make order of filters correct
-      case x :: xs if !movable(x) =>
+      case x :: xs if orderAnalyzer.usesAggregate(x) =>
         loop(xs, Nil, List(x) +: (if (curr.nonEmpty) curr.reverse +: acc else acc))
       // can continue to accumulate in current unit
-      case x :: xs if movable(x) => loop(xs, x +: curr, acc)
+      case x :: xs if !orderAnalyzer.usesAggregate(x) => loop(xs, x +: curr, acc)
     }
     loop(exprs, Nil, Nil).reverse
   }
@@ -236,14 +226,15 @@ class BasicOptimizer(val input: Seq[TopLevel] = Nil, val optims: Seq[String] = N
 
   /**
    * Push filters below a join, based on the tables needed and whether or not the filters
-   * are movable.
+   * use aggregates. Filters that use aggregates can have different values once join takes place
+   * so we shouldn't push
    * @param r
    * @return
    */
   def pushFiltersJoin(r: RelAlg): RelAlg = {
     val optim: PartialFunction[RelAlg, RelAlg] = {
       case Filter(j @ Join(_, _, _, _, _), fs, _) =>
-        val (before, after) = fs.span(movable)
+        val (before, after) = fs.span(!orderAnalyzer.usesAggregate(_))
         // we push down filters that can be executed "before"
         // note foldRight, each filter is placed as deeply as possible
         // so for earlier filters to execute first, they must be push down later in fold

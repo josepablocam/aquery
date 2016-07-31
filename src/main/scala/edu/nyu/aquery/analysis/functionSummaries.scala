@@ -11,6 +11,7 @@ sealed abstract class FunctionSummary {
   def signature: PartialFunction[Seq[TypeTag], TypeTag]
   def orderDependent: Boolean
   def remOrderDependence: Boolean
+  def usesAggregate: Boolean
 }
 
 /**
@@ -23,7 +24,8 @@ class BuiltInSummary(
   val f: String,
   val signature: PartialFunction[Seq[TypeTag], TypeTag],
   val orderDependent: Boolean = false,
-  val remOrderDependence: Boolean = false) extends FunctionSummary
+  val remOrderDependence: Boolean = false,
+  val usesAggregate: Boolean = false) extends FunctionSummary
 
 /**
  * Summary for an UDF
@@ -35,4 +37,5 @@ class UDFSummary(
   val f: String,
   val signature: PartialFunction[Seq[TypeTag], TypeTag],
   val orderDependent: Boolean = false,
-  val remOrderDependence: Boolean = false) extends FunctionSummary
+  val remOrderDependence: Boolean = false,
+  val usesAggregate: Boolean = false) extends FunctionSummary

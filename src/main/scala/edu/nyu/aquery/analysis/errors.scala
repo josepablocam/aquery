@@ -89,11 +89,12 @@ case class AmbigColAccess(ca: String, pos: Position) extends AnalysisError {
 
 /**
  * Illegal expression used as sort column. For now, we only allow normal column (Id(_)) or
- * a column access such as t.c1
+ * a column access such as t.c1. Similarly, using correlation-based access, ROWID or Wildcard
+ * in a construct that is not a query.
  * @param s
  * @param pos
  */
-case class IllegalSort(s: String, pos: Position) extends AnalysisError {
+case class IllegalExpr(s: String, pos: Position) extends AnalysisError {
   override def toString =
-    "Sort Error: Illegal expression for sort in " + s + " at " + loc()
+    "Expr Error: Illegal expression in " + s + " at " + loc()
 }

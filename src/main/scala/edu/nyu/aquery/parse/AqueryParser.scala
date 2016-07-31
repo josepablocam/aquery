@@ -118,6 +118,7 @@ object AqueryParser extends StandardTokenParsers with PackratParsers {
   protected val JOIN = Keyword("JOIN")
   protected val LAST = Keyword("LAST", fun = true)
   protected val LIKE = Keyword("LIKE")
+  protected val LIST = Keyword("LIST", fun = true)
   protected val LOAD = Keyword("LOAD")
   protected val MAX = Keyword("MAX", fun = true)
   protected val MAXS = Keyword("MAXS", fun = true)
@@ -141,7 +142,7 @@ object AqueryParser extends StandardTokenParsers with PackratParsers {
   protected val SAVE = Keyword("SAVE")
   protected val SET =  Keyword("SET")
   protected val SELECT = Keyword("SELECT")
-  protected val SHOW = Keyword("SHOW")
+  protected val SHOW = Keyword("SHOW", fun = true)
   protected val SQRT = Keyword("SQRT", fun = true)
   protected val STDDEV = Keyword("STDDEV", fun = true)
   protected val STRING = Keyword("STRING")
@@ -173,9 +174,9 @@ object AqueryParser extends StandardTokenParsers with PackratParsers {
 
   // An AQuery program is a non-empty list of top-level constructs
   def program: Parser[List[TopLevel]] =
-    rep1(fullQuery
+    rep1(io
+        |fullQuery
         | verbatim
-        | io
         | udf
         | delete
         | update
@@ -219,7 +220,7 @@ object AqueryParser extends StandardTokenParsers with PackratParsers {
     (FROM ~> from) ~
     (ASSUMING ~> order).?  ~
     (WHERE ~> where).? ~
-    (GROUP ~> BY ~> groupBy ~ (HAVING ~> rep1sep(expr, ",")).? ^^ {
+    (GROUP ~> BY ~> groupBy ~ (HAVING ~> rep1sep(expr, "AND")).? ^^ {
       case g ~ h => (g, h.getOrElse(Nil))
     }).? ^^ {
       case d ~ p ~ t ~ s ~ w ~ gh =>
@@ -332,7 +333,7 @@ object AqueryParser extends StandardTokenParsers with PackratParsers {
       (SET ~> rep1sep(elemUpdate, ",")) ~
       (ASSUMING ~> order).? ~
       (WHERE ~> where).? ~
-      (GROUP ~> BY ~> rep1sep(expr, ",") ~ (HAVING ~> rep1sep(expr, ",")).? ^^ { case g ~ h =>
+      (GROUP ~> BY ~> rep1sep(expr, ",") ~ (HAVING ~> rep1sep(expr, "AND")).? ^^ { case g ~ h =>
         (g, h.getOrElse(Nil))
       }).? ^^ { case t ~ u ~ o ~ w ~ gh  =>
       val (gL, hL) = gh.getOrElse((Nil, Nil))
@@ -350,13 +351,13 @@ object AqueryParser extends StandardTokenParsers with PackratParsers {
     positioned(DELETE ~> FROM ~> ident ~
       (ASSUMING ~> order).? ~
       (WHERE ~> where).? ~
-      (GROUP ~> BY ~> rep1sep(expr, ",") ~ (HAVING ~> rep1sep(expr, ","))).? ^^ {
+      (GROUP ~> BY ~> rep1sep(expr, ",") ~ (HAVING ~> rep1sep(expr, "AND"))).? ^^ {
         case t ~ o ~ w ~ gh =>
           // extract lists of group/having expressions
           val (gL, hL) = gh.map { case g ~ h => (g, h) }.getOrElse((Nil, Nil))
           Delete(t, Right(w.getOrElse(Nil)), o.getOrElse(Nil), gL, hL)
       }
-     | (DELETE ~> rep1sep(ident, ",") <~ FROM) ~ ident ^^ { case cs ~ t =>
+     | (DELETE ~> rep1sep(id, ",") <~ FROM) ~ ident ^^ { case cs ~ t =>
       Delete(t, Left(cs), Nil, Nil, Nil)
     }
      )
@@ -367,9 +368,9 @@ object AqueryParser extends StandardTokenParsers with PackratParsers {
   // the order clause applies to the new data to be inserted
   def insert: Parser[Insert] =
     positioned(INSERT ~> INTO ~> ident ~
-      (ASSUMING ~> order).? ~
       modInsert.? ~
-      srcInsert ^^ { case n ~ o ~ m ~ s => Insert(n, o.getOrElse(Nil), m.getOrElse(Nil), s)})
+      (ASSUMING ~> order).? ~
+      srcInsert ^^ { case n ~ m ~ o ~ s => Insert(n, o.getOrElse(Nil), m.getOrElse(Nil), s)})
 
   // Insertion order can be modified by specifying the columns to put value sinto
   def modInsert: Parser[List[String]] = "(" ~> repsep(ident, ",") <~ ")"

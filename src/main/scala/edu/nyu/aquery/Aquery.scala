@@ -2,6 +2,8 @@ package edu.nyu.aquery
 
 import java.io.{File, PrintStream}
 
+import edu.nyu.aquery.codegen.KdbGenerator
+
 import scala.annotation.tailrec
 import scala.io.Source
 
@@ -117,7 +119,7 @@ object Aquery extends App {
   val representation = optimized.map { p =>
     config.action match {
       case Graph => Dot.toGraph(p)
-      case Compile => p.toString + "\n"
+      case Compile => KdbGenerator.generate(p)
     }
   }
 

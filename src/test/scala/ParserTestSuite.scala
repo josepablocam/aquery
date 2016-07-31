@@ -49,7 +49,15 @@ class ParserTestSuite extends FunSuite {
 
   def parseResource(resource: String): Boolean = {
     val prog = Source.fromURL(getClass.getResource(resource)).getLines.mkString("\n")
-    AqueryParser(prog).successful
+    AqueryParser(prog) match {
+      case Success(_, _) => true
+      case Failure(msg, _) =>
+        println(msg)
+        false
+      case Error(msg, _) =>
+        println(msg)
+        false
+    }
   }
 
   // expressions
@@ -111,6 +119,17 @@ class ParserTestSuite extends FunSuite {
     assert(expectParse(create, c2S)(Some(c2E == _)), "create with query")
   }
 
+  test("io") {
+    val saveS = """ SELECT * FROM t INTO OUTFILE "my_test_file.csv" FIELDS TERMINATED BY "," """
+    val saveE =
+      Save("my_test_file.csv", Query(Nil, Project(Table("t"), (WildCard, None) :: Nil)), ",")
+    assert(expectParse(io, saveS)(Some(saveE == _)))
+
+    val loadS = """ LOAD DATA INFILE "my_test_file.csv" INTO TABLE t2 FIELDS TERMINATED BY "," """
+    val loadE = Load("my_test_file.csv", "t2", ",")
+    assert(expectParse(io, loadS)(Some(loadE == _)))
+  }
+
   test("update") {
     val uS = "UPDATE t SET c1 = 10 ASSUMING ASC c WHERE a > 10 GROUP BY h HAVING sums(a) > 10"
     val uE = Update(
@@ -144,7 +163,7 @@ class ParserTestSuite extends FunSuite {
 
     // column-wise
     val dCS = "DELETE c1, c2 from t"
-    val dCE = Delete("t", Left("c1" :: "c2" :: Nil), Nil, Nil, Nil)
+    val dCE = Delete("t", Left(Id("c1") :: Id("c2") :: Nil), Nil, Nil, Nil)
     assert(expectParse(delete, dCS)(Some(dCE == _)), "column-wise deletion")
 
     assert(expectParse(delete, "DELETE c1 FROM t WHERE c1 > 100")(None), "can't mix col-row delete")
