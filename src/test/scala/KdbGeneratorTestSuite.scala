@@ -116,7 +116,7 @@ class KdbGeneratorTestSuite extends FunSuite {
       """
         <q> base:([]c1:1000?100; c2:1000?100; c3:1000?100) </q>
         CREATE TABLE aq_t1 (c1 INT, c2 STRING, c3 BOOLEAN)
-        CREATE TABLE aq_t2
+        CREATE TABLE aq_t2 AS
           SELECT
           c1 * 2 as c1, sums(c2) as c2, max(c3) as max_c3
           FROM base ASSUMING ASC c3 WHERE c1 > 10
@@ -202,43 +202,10 @@ class KdbGeneratorTestSuite extends FunSuite {
       """
         <q> base:([]c1:1000?100; c2:1000?100; c3:1000?100); </q>
 
-        CREATE TABLE upd_t
+        CREATE TABLE upd_t as
           SELECT * FROM base
 
-        CREATE TABLE del_t
-          SELECT * FROM base
-
-         UPDATE upd_t
-         SET c1 = c1 * 2, c3 = CASE WHEN c3 > 50 THEN 1 else -1 END
-         ASSUMING ASC c1
-
-         DELETE FROM del_t GROUP BY c1 HAVING COUNT(c2) > 4
-
-        <q>.aq.c1:{upd_t}; .aq.c2:{del_t};</q>
-      """
-    val qcode =
-      """
-        .kdb.c1:{0N!update c1:c1 * 2, c3:?[c3 > 50;1;-1] from `c1 xasc base};
-        .kdb.c2:{0N!delete from base where 4 <(count;c2) fby c1}
-      """
-
-    val tests = "c1, c2"
-    val (passed0, msg0) = run(acode, qcode, tests, optimize = false)
-    assert(passed0, "basic: " + msg0)
-
-    val (passed1, msg1) = run(acode, qcode, tests, optimize = true)
-    assert(passed1, "optimized: " + msg1)
-  }
-
-  test("simple queries") {
-    val acode =
-      """
-        <q> base:([]c1:1000?100; c2:1000?100; c3:1000?100); </q>
-
-        CREATE TABLE upd_t
-          SELECT * FROM base
-
-        CREATE TABLE del_t
+        CREATE TABLE del_t as
           SELECT * FROM base
 
          UPDATE upd_t

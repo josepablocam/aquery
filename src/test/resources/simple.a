@@ -157,7 +157,7 @@ INSERT INTO aq_t1(c2, c1) VALUES(-1, -2)
 SELECT * FROM aq_t1
 
 // updates
-CREATE TABLE aq_tu1
+CREATE TABLE aq_tu1 AS
   SELECT * FROM tu1
 
 UPDATE aq_tu1 SET c3 = last(sums(c2))
@@ -166,7 +166,7 @@ WHERE c1 < 3 GROUP BY c1, c2 HAVING count(c2) >= 2
 
 SELECT * FROM aq_tu1
 
-CREATE TABLE aq_tu2
+CREATE TABLE aq_tu2 as
   SELECT * FROM tu2
 
 UPDATE aq_tu2 SET c3 = max(c2) WHERE c1 > 0
@@ -174,13 +174,13 @@ UPDATE aq_tu2 SET c3 = max(c2) WHERE c1 > 0
 SELECT * FROM aq_tu2
 
 // deletes
-CREATE TABLE aq_td1
+CREATE TABLE aq_td1 as
   SELECT * FROM tu1
 
 DELETE FROM aq_td1 ASSUMING ASC c2 where c1 < 3 group by c1 having count(c2) > 1
 SELECT * FROM aq_td1
 
-CREATE TABLE aq_td2
+CREATE TABLE aq_td2 as
   SELECT * FROM tu2
 
 DELETE c2 FROM aq_td2

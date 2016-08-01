@@ -113,7 +113,7 @@ class ParserTestSuite extends FunSuite {
     val c1E = Create("t", Left(List(("a", TypeInt), ("b", TypeString))))
     assert(expectParse(create, c1S)(Some(c1E == _)), "create with schema")
 
-    val c2S = "CREATE TABLE t SELECT * FROM t1"
+    val c2S = "CREATE TABLE t as SELECT * FROM t1"
     val q = Query(Nil, Project(Table("t1", None), (WildCard, None) :: Nil))
     val c2E = Create("t", Right(q))
     assert(expectParse(create, c2S)(Some(c2E == _)), "create with query")

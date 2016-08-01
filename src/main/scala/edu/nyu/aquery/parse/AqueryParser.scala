@@ -386,7 +386,7 @@ object AqueryParser extends StandardTokenParsers with PackratParsers {
   def create: Parser[Create] =
     positioned(CREATE ~> TABLE ~> ident ~
       (schema ^^ { Left(_) }
-        | fullQuery ^^ { Right(_) }
+        | AS ~> fullQuery ^^ { Right(_) }
         ) ^^ { case n ~ s => Create(n, s) })
 
   // A table schema consists of column name and type tuples
