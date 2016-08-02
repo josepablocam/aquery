@@ -131,7 +131,7 @@ class ParserTestSuite extends FunSuite {
   }
 
   test("update") {
-    val uS = "UPDATE t SET c1 = 10 ASSUMING ASC c WHERE a > 10 GROUP BY h HAVING sums(a) > 10"
+    val uS = "UPDATE t ASSUMING ASC c SET c1 = 10 WHERE a > 10 GROUP BY h HAVING sums(a) > 10"
     val uE = Update(
       "t",
       ("c1", IntLit(10)) :: Nil,

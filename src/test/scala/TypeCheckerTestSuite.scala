@@ -179,7 +179,7 @@ class TypeCheckerTestSuite extends FunSuite {
   test("modification queries") {
     val badUpdate = parse(update, "UPDATE t SET c1 = bad.c2 * 3 WHERE c1 > 2").get
     assert(simpleChecker.checkModificationQuery(badUpdate).nonEmpty, "bad col access")
-    val okUpdate = parse(update, "UPDATE t SET c1 = f(t.c1) ASSUMING ASC c2 WHERE sums(c1 > 2) > 2").get
+    val okUpdate = parse(update, "UPDATE t ASSUMING ASC c2 SET c1 = f(t.c1) WHERE sums(c1 > 2) > 2").get
     assert(simpleChecker.checkModificationQuery(okUpdate) === List())
   }
 

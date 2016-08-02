@@ -160,8 +160,9 @@ SELECT * FROM aq_t1
 CREATE TABLE aq_tu1 AS
   SELECT * FROM tu1
 
-UPDATE aq_tu1 SET c3 = last(sums(c2))
+UPDATE aq_tu1
 ASSUMING ASC c2
+SET c3 = last(sums(c2))
 WHERE c1 < 3 GROUP BY c1, c2 HAVING count(c2) >= 2
 
 SELECT * FROM aq_tu1

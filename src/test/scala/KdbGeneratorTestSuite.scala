@@ -208,9 +208,8 @@ class KdbGeneratorTestSuite extends FunSuite {
         CREATE TABLE del_t as
           SELECT * FROM base
 
-         UPDATE upd_t
+         UPDATE upd_t ASSUMING ASC c1
          SET c1 = c1 * 2, c3 = CASE WHEN c3 > 50 THEN 1 else -1 END
-         ASSUMING ASC c1
 
          DELETE FROM del_t GROUP BY c1
          HAVING COUNT(c2) > 4 AND any(c3 > 2)

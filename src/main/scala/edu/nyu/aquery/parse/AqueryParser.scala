@@ -330,12 +330,12 @@ object AqueryParser extends StandardTokenParsers with PackratParsers {
   // Group by (with optional having)
   def update: Parser[Update] =
     positioned(UPDATE ~> ident ~
-      (SET ~> rep1sep(elemUpdate, ",")) ~
       (ASSUMING ~> order).? ~
+      (SET ~> rep1sep(elemUpdate, ",")) ~
       (WHERE ~> where).? ~
       (GROUP ~> BY ~> rep1sep(expr, ",") ~ (HAVING ~> rep1sep(expr, "AND")).? ^^ { case g ~ h =>
         (g, h.getOrElse(Nil))
-      }).? ^^ { case t ~ u ~ o ~ w ~ gh  =>
+      }).? ^^ { case t ~ o ~ u ~ w ~ gh  =>
       val (gL, hL) = gh.getOrElse((Nil, Nil))
       Update(t, u, o.getOrElse(Nil), w.getOrElse(Nil), gL, hL)
     })
