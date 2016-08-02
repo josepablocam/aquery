@@ -1,7 +1,7 @@
 package edu.nyu.aquery.codegen
 
 import edu.nyu.aquery.ast._
-import edu.nyu.aquery.optimization.BasicOptimizer.{ColSortBy, ReorderFilter}
+import edu.nyu.aquery.optimization.BasicOptimizer.{addColNames, ColSortBy, ReorderFilter}
 
 import scala.io.Source
 import scala.util.Try
@@ -521,34 +521,6 @@ class KdbGenerator extends BackEnd {
         val reordered = s".aq.reorderFilter[$t;$fs]"
         s"$before\n $t:${kdbSelect(Some(t), Some(reordered), None, None)};"
       }
-  }
-
-  /**
-   * "Infer" a column name from an expression. Currently only the simplest possible.
-   * This could potentially be changed but it is important to check if this causes issues
-   * elsewhere, as there are some assumptions that depend on upsert semantics in kdb+.
-   * @param e
-   * @return
-   */
-  def inferColName(e: Expr): Option[String] = e match {
-    case Id(v) => Some(v)
-    case ColumnAccess(t, c) => Some("t" + "." + c)
-    case _ => None
-  }
-
-  /**
-   * Add column names to a sequence of expressions and possible column names
-   * @param es
-   * @return
-   */
-  def addColNames(es: Seq[(Expr, Option[String])]): Seq[(Expr, String)] = {
-    es.foldLeft((0, List.empty[(Expr, String)])) { case ((id, acc), (e, n)) =>
-      val (next, name) =
-        n.map((id, _))
-          .orElse(inferColName(e).map((id, _)))
-          .getOrElse((id + 1, "c__" + id))
-      (next, (e, name) :: acc)
-    }._2.reverse
   }
 
   /**

@@ -277,6 +277,56 @@ class BasicOptimizerTestSuite extends FunSuite {
     )
   }
 
+  test("useExistingGroups") {
+    val query1 = parse(query,
+      """
+        SELECT c2 * 3, c4 * c5, max(c7) FROM t
+        GROUP BY c2 * 3 as first_group, c4 * 2, c4 * c5
+      """).get
+    val expect1 = parse(query,
+      """
+        SELECT first_group, c__1, max(c7) from t
+        GROUP BY c2 * 3 as first_group, c4 * 2 as c__0, c4 * c5 as c__1
+      """).get
+    val result1 = optimizer.useExistingGroups(query1)
+    assert(result1 === expect1)
+
+    val query2 = parse(query,
+      """
+        SELECT c2 * 5, c1 FROM t GROUP BY c1 as cx, c2
+      """).get
+    val expect2 = query2
+    val result2 = optimizer.useExistingGroups(query2)
+    assert(expect2 === result2)
+
+    val query3 = parse(query,
+      """
+        SELECT c1, c2, f(c10 + 3) FROM t ASSUMING ASC c1 GROUP BY c1, c5 * 4
+      """
+    ).get
+    val expect3 = query3
+    val result3 = optimizer.useExistingGroups(query3)
+    assert(result3 === expect3)
+
+    val query4 = parse(query,
+      """
+        SELECT c3,  f(c1) * max(c2), c5 FROM t GROUP BY c3, f(c1) * max(c2) as pre_calc
+      """
+    ).get
+    val expect4 = parse(query,
+      """
+        SELECT c3,  pre_calc, c5 FROM t GROUP BY c3 as c3, f(c1) * max(c2) as pre_calc
+      """
+    ).get
+    val result4 = optimizer.useExistingGroups(query4)
+    assert(result4 === expect4)
+
+    assert(
+      List(result1, result2).forall(q => optimizer.useExistingGroups(q) === q),
+      "idempotency"
+    )
+  }
+
   test("batch optimization") {
     val prog1 = parse(program,
       """

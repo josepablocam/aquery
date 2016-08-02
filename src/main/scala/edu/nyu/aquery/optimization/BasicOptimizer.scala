@@ -26,6 +26,7 @@ class BasicOptimizer(val input: Seq[TopLevel] = Nil, val optims: Seq[String] = N
       pushFiltersJoin -> push selections below joins
       makeReorderFilter -> create filter nodes with movable selections (keeps semantics)
       sortToSortCols -> sort only needed columns
+      useExistingGroups -> if a projection is available as a group, use and avoid recompute
     """
 
   val orderAnalyzer: OrderAnalysis = OrderAnalysis(input)
@@ -41,6 +42,7 @@ class BasicOptimizer(val input: Seq[TopLevel] = Nil, val optims: Seq[String] = N
       "filterBeforeSort" -> ((e, q) => filterBeforeSort(q)),
       "embedSort" -> ((e, q) => embedSort(q)),
       "simplifyEmbeddedSort" -> ((e, q) => simplifyEmbeddedSort (q)),
+      "useExistingGroups" -> ((e, q) => useExistingGroups(q)),
       "pushFiltersJoin" -> ((e, q) => pushFiltersJoin(q)),
       "makeReorderFilter" -> ((e, q) => makeReorderFilter(q)),
       "sortToSortCols" -> ((e, q) => sortToSortCols(q))
@@ -296,6 +298,48 @@ class BasicOptimizer(val input: Seq[TopLevel] = Nil, val optims: Seq[String] = N
     }
   }
 
+  /**
+   * If a projection is already available as a group-by group, use the group column, rather
+   * than recalculate the same value again.
+   * @param r
+   * @return
+   */
+  def useExistingGroups(r: RelAlg): RelAlg = {
+    val optim: PartialFunction[RelAlg, RelAlg] = {
+      case p @ Project(src, ps, _) =>
+        val groupBy = src.findp { case GroupBy(_, _, _, _) => true }
+        val groups = groupBy.map(_.expr).getOrElse(Nil)
+        // we don't really care about replacing simple column accesses
+        def interesting(e: Expr): Boolean = !e.isInstanceOf[Id] && !e.isInstanceOf[ColumnAccess]
+        val hasUseful = ps.exists { case (e, _) => interesting(e) && groups.contains(e) }
+
+        groupBy match {
+          case Some(GroupBy(_, gs, _, _)) if hasUseful =>
+            val namedGroups = addColNames(gs)
+            val groupMap = namedGroups.toMap
+            // clean projections with expressions replaced as appropriate
+            val cleanPs = ps.map {
+              // lookup more interesting expressions
+              case (e, n) if interesting(e) => (groupMap.get(e).map(Id).getOrElse(e), n)
+              // return others without looking up
+              case x => x
+            }
+            // need to make sure group by has renamed columns
+            val cleanNamedGroups = namedGroups.map { case (g, n) => (g, Some(n)) }.toList
+            val label: PartialFunction[RelAlg, RelAlg] = {
+              // arrived at the groupby we found before, use named groups
+              case node @ GroupBy(_, g, _, _) if g == gs => node.copy(gs = cleanNamedGroups)
+            }
+            // relabel try to use new group by
+            val relabeled = src.transform(label)
+            Project(relabeled, cleanPs)
+          // no group by or not useful, so just return node
+          case _ => p
+        }
+    }
+    r.transform(optim)
+  }
+
   // TODO: join: cross to join
 
   def optimizeQuery(q: Query): Query = {
@@ -375,6 +419,34 @@ object BasicOptimizer {
       val (sourceNode, nextAvail) = t.dotify(currAvail + 1)
       (sortNode + sourceEdge + sourceNode, nextAvail)
     }
+  }
+
+  /**
+   * "Infer" a column name from an expression. Currently only the simplest possible.
+   * This could potentially be changed but it is important to check if this causes issues
+   * elsewhere, as there are some assumptions that depend on upsert semantics in kdb+.
+   * @param e
+   * @return
+   */
+  def inferColName(e: Expr): Option[String] = e match {
+    case Id(v) => Some(v)
+    case ColumnAccess(t, c) => Some("t" + "." + c)
+    case _ => None
+  }
+
+  /**
+   * Add column names to a sequence of expressions and possible column names
+   * @param es
+   * @return
+   */
+  def addColNames(es: Seq[(Expr, Option[String])]): Seq[(Expr, String)] = {
+    es.foldLeft((0, List.empty[(Expr, String)])) { case ((id, acc), (e, n)) =>
+      val (next, name) =
+        n.map((id, _))
+          .orElse(inferColName(e).map((id, _)))
+          .getOrElse((id + 1, "c__" + id))
+      (next, (e, name) :: acc)
+    }._2.reverse
   }
 
   def apply(prog: Seq[TopLevel], opts: Seq[String] = Nil): BasicOptimizer = new BasicOptimizer(prog, opts)
