@@ -915,7 +915,11 @@ class KdbGenerator(val runQueries: Boolean = true) extends BackEnd {
       val cleanGroups: List[(Expr, Option[String])] = group.map((_, None))
       // collect all columns, add vecResult column (which just masks virtual index col)
       val project: List[(Expr, Option[String])] = List((WildCard, None), (RowId, Some(vec)))
-      val query = GroupBy(Filter(Project(Table(sortedT), project), where), cleanGroups, having)
+      val query =
+        if (where.nonEmpty)
+          GroupBy(Filter(Project(Table(sortedT), project), where), cleanGroups, having)
+        else
+          GroupBy(Project(Table(sortedT), project), cleanGroups, having)
       // based on indices that return from query, assign true to those locations, false to others
       // this vector can then be used to perform update/delete ops by applying `where` to it
       val assignToIndex =
