@@ -51,7 +51,8 @@ class KdbGeneratorTestSuite extends FunSuite {
 
     // translate
     val optCode = if (optimize) "1" else "0"
-    Aquery.main(Array("-a", optCode, "-c", "-o", tfile.getAbsolutePath, afile.getAbsolutePath))
+    // don't immmediately execute queries (runner.q calls them as necessary)
+    Aquery.main(Array("-nr", "-a", optCode, "-c", "-o", tfile.getAbsolutePath, afile.getAbsolutePath))
     // want translated and kdb file
     (tfile, qfile)
   }

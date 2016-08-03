@@ -8,7 +8,7 @@ import scala.util.Try
 
 import scalaz.State
 
-class KdbGenerator extends BackEnd {
+class KdbGenerator(val runQueries: Boolean = true) extends BackEnd {
   // set of built-ins (with overloads disambiguated by attaching number of args)
   // kdb versions of these are the same names just prefixed by .aq.
   val BUILT_INS =
@@ -944,8 +944,9 @@ class KdbGenerator extends BackEnd {
         code <- genQuery(q)
       ) yield {
         val qName = getQueryName(id)
+        val call = if (runQueries) s"$qName[]" else ""
         // generate the query code and run
-        s"$qName:{\n$code\n };\n$qName[]"
+        s"$qName:{\n$code\n };\n$call"
       }
     case VerbatimCode(c) => SimpleState.unit("// verbatim code\n" + c)
     case io: DataIO => genDataIO(io)
@@ -982,6 +983,7 @@ class KdbGenerator extends BackEnd {
  }
 
 object KdbGenerator {
-  def apply(): KdbGenerator = new KdbGenerator()
-  def generate(prog: Seq[TopLevel]): String = new KdbGenerator().generate(prog)
+  def apply(): KdbGenerator = new KdbGenerator(runQueries = true)
+  def generate(prog: Seq[TopLevel], runQueries: Boolean = true): String =
+    new KdbGenerator(runQueries).generate(prog)
 }

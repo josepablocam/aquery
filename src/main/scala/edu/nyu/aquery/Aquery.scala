@@ -25,13 +25,14 @@ object Aquery extends App {
       """
         AQuery Compiler
         Options:
-        -p: print dot graph to stdout
+        -p: print dot graph
         -c: generate code
         -a: optimize (0/1)
         -opts: comma separated list of optimizations (set to all by default if not provided)
         -s: silence warnings
         -tc: (soft) type checking (off by default)
         -o: code output file (if none, then stdout)
+        -nr: defines queries as functions, but doesn't automatically call them (useful for testing)
         If both -p and -c are set, will only perform last specified
       """
     )
@@ -46,13 +47,16 @@ object Aquery extends App {
   case object Compile extends CompilerActions
 
   case class AqueryConfig(
-    action: CompilerActions = Compile,
-    optim: Int = 0,
-    silence: Boolean = false,
-    typeCheck: Boolean = false,
-    optimFuns: Seq[String] = Nil,
-    input: Option[String] = None,
-    output: Option[String] = None)
+    action: CompilerActions = Compile, // end action to perform on input code
+    optim: Int = 0,                    // optimize or not
+    silence: Boolean = false,          // silence warnings
+    typeCheck: Boolean = false,        // perform soft type checking
+    optimFuns: Seq[String] = Nil,      // specific optimizations
+    runQueries: Boolean = true,        // run queries immediately after defining
+    input: Option[String] = None,      // input file
+    output: Option[String] = None)     // output file
+
+  def notCommand(s: String) = s(0) != '-'
 
   @tailrec
   def parseConfig(config: Option[AqueryConfig], args: List[String])
@@ -63,13 +67,14 @@ object Aquery extends App {
     case (c, "-c" :: rest) => parseConfig(c.map(_.copy(action = Compile)), rest)
     case (c, "-a" :: level :: rest) if level forall Character.isDigit =>
       parseConfig(c.map(_.copy(optim = level.toInt)), rest)
-    case (c, "-o" :: f :: rest) if f(0) != '-' => parseConfig(c.map(_.copy(output = Some(f))), rest)
+    case (c, "-o" :: f :: rest) if notCommand(f) => parseConfig(c.map(_.copy(output = Some(f))), rest)
     case (c, "-h" :: _) => None
     case (c, "-s" :: rest) => parseConfig(c.map(_.copy(silence = true)), rest)
     case (c, "-tc" :: rest) => parseConfig(c.map(_.copy(typeCheck = true)), rest)
-    case (c, f :: Nil) if f(0) != '-' => c.map(_.copy(input = Some(f)))
-    case (c, "-opts" :: opts :: rest) if opts(0) != '-' =>
+    case (c, f :: Nil) if notCommand(f) => c.map(_.copy(input = Some(f)))
+    case (c, "-opts" :: opts :: rest) if notCommand(opts) =>
       parseConfig(c.map(_.copy(optimFuns = opts.split(","))), rest)
+    case (c, "-nr" :: rest) => parseConfig(c.map(_.copy(runQueries = false)), rest)
     case _ => None
   }
 
@@ -119,7 +124,7 @@ object Aquery extends App {
   val representation = optimized.map { p =>
     config.action match {
       case Graph => Dot.toGraph(p)
-      case Compile => KdbGenerator.generate(p)
+      case Compile => KdbGenerator.generate(p, config.runQueries)
     }
   }
 
