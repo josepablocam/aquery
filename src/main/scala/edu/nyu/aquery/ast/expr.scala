@@ -156,6 +156,21 @@ case class FunCall(f: String, args: List[Expr]) extends CallExpr {
 }
 
 /**
+ * Each-modified expressions
+ * @param arg
+ */
+case class Each(arg: Expr) extends Expr {
+  def children = List(arg)
+  def dotify(currAvail: Int): (String, Int) = {
+    val (strArg, next) = arg.dotify(currAvail)
+    ("FOREACH(" + strArg + ")", next)
+  }
+  def transform(fun: PartialFunction[Expr, Expr]) = {
+    Each(arg.transform(fun)).transform0(fun)
+  }
+}
+
+/**
  * Safe indexing operators
  */
 sealed trait IndexOperator

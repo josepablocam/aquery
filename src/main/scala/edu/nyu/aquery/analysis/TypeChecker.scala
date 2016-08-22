@@ -160,6 +160,7 @@ class TypeChecker(info: FunctionInfo) {
     case Id(_) => (TUnknown, Nil)
     case RowId => (TNumeric, Nil)
     case ColumnAccess(_, _) | WildCard => (TUnknown, Nil)
+    case Each(e) => checkExpr(e)
   }
 
   /**

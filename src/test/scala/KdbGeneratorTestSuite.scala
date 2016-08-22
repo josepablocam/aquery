@@ -231,6 +231,43 @@ class KdbGeneratorTestSuite extends FunSuite {
     assert(passed1, "optimized: " + msg1)
   }
 
+  test("each-modifier") {
+    val acode =
+      """
+        <q> base:([]c1:1000?100; c2:raze 100#'til 10; c3:1000?100); </q>
+
+        WITH
+          temp1 AS (
+            SELECT c2, c1 FROM base GROUP BY c2
+            )
+         SELECT
+         c2,
+         FOREACH(sum(c1) * deltas(c1)) as random,
+         FOREACH(max(c1)) as max_per_group
+         from temp1
+
+        WITH
+         temp1 AS (
+          SELECT c2, c1 FROM base GROUP BY c2
+          )
+          SELECT max(c1) as max_array from temp1
+      """
+    val qcode =
+      """
+        .kdb.q0:{
+          0!select random:sum[c1] * deltas c1, max_per_group:max c1 by c2 from base
+          }
+         .kdb.q1:{ select max_array:max c1 from `c2 xgroup base }
+      """
+
+    val tests = "q0,q1"
+    val (passed0, msg0) = run(acode, qcode, tests, optimize = false)
+    assert(passed0, "basic: " + msg0)
+
+    val (passed1, msg1) = run(acode, qcode, tests, optimize = true)
+    assert(passed1, "optimized: " + msg1)
+  }
+
   test("simple.a") {
     val acode = getCode("simple.a")
     val qcode = getCode("q/simple.q")

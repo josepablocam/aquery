@@ -102,6 +102,7 @@ object AqueryParser extends StandardTokenParsers with PackratParsers {
   protected val FIRST = Keyword("FIRST", fun = true)
   protected val FLATTEN = Keyword("FLATTEN", fun = true)
   protected val FLOAT = Keyword("FLOAT")
+  protected val FOREACH = Keyword("FOREACH", fun = true)
   protected val FROM = Keyword("FROM")
   protected val FULL = Keyword("FULL")
   protected val FUNCTION = Keyword("FUNCTION")
@@ -502,8 +503,11 @@ object AqueryParser extends StandardTokenParsers with PackratParsers {
 
 
   // function call (handle UDF and built-in separately to avoid conflict with reserved words)
-  def funCall: Parser[FunCall] =
-    positioned(ident ~ ("(" ~> repsep(expr, ",") <~ ")") ^^ { case f ~ args => FunCall(f, args) }
+  // and each-modifiers
+  def funCall: Parser[Expr] =
+    positioned(
+      ident ~ ("(" ~> repsep(expr, ",") <~ ")") ^^ { case f ~ args => FunCall(f, args) }
+      | FOREACH ~> "(" ~> expr <~ ")" ^^ { arg => Each(arg) }
       | builtin ~ ("(" ~> repsep(expr, ",") <~ ")") ^^ { case f ~ args => FunCall(f.str.toUpperCase, args) }
       )
 

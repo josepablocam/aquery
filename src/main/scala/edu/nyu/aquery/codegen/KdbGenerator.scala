@@ -217,6 +217,7 @@ class KdbGenerator(val runQueries: Boolean = true) extends BackEnd {
     case aix: ArrayIndex => genArrayIndex(aix)
     case ce: Case => genCaseExpr(ce)
     case te: TableExpr => genTableExpr(te)
+    case me: Each => genEach(me)
   }
 
   /**
@@ -403,6 +404,19 @@ class KdbGenerator(val runQueries: Boolean = true) extends BackEnd {
       s"($cleanF;$cleanAs)"
     }
   }
+
+  /**
+   * Generates code for each-modified expressions, does so by setting grouped attribute (and
+   * removing after generating code)
+   * @param expr
+   * @return
+   */
+  def genEach(expr: Each): CodeGen =
+    for (
+      _ <- setGrouped;
+      e <- genExpr(expr.arg);
+      _ <- remGrouped
+    ) yield e
 
   /**
    * Generate code for if-then pair, returns (enlist; c; t)
