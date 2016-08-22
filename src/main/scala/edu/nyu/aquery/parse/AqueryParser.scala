@@ -102,7 +102,7 @@ object AqueryParser extends StandardTokenParsers with PackratParsers {
   protected val FIRST = Keyword("FIRST", fun = true)
   protected val FLATTEN = Keyword("FLATTEN", fun = true)
   protected val FLOAT = Keyword("FLOAT")
-  protected val FOREACH = Keyword("FOREACH", fun = true)
+  protected val FOREACH = Keyword("FOREACH")
   protected val FROM = Keyword("FROM")
   protected val FULL = Keyword("FULL")
   protected val FUNCTION = Keyword("FUNCTION")
