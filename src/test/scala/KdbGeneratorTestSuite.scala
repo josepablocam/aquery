@@ -242,8 +242,8 @@ class KdbGeneratorTestSuite extends FunSuite {
             )
          SELECT
          c2,
-         FOREACH(sum(c1) * deltas(c1)) as random,
-         FOREACH(max(c1)) as max_per_group
+         EACHROW(sum(c1) * deltas(c1)) as random,
+         EACHROW(max(c1)) as max_per_group
          from temp1
 
         WITH
