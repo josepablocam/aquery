@@ -91,7 +91,7 @@ class ParserTestSuite extends FunSuite {
     assert(expectParse(expr, simpleS)(Some(simpleE == _)), "simple without else")
     assert(expectParse(expr, elseS)(Some(elseE == _)), "simple with else")
 
-    val simple2S = "case f(x) WHEN 3 THEN 4 ELSE 5 END"
+    val simple2S = "case f(x) WHEN 3 THEN 4 ELSE 5 End"
     val simple2E = Case(Some(FunCall("f", List('x'))), List(IfThen(3, 4)), Some(5))
     assert(expectParse(expr, simple2S)(Some(simple2E == _)), "simple with initial expr")
 
@@ -109,7 +109,7 @@ class ParserTestSuite extends FunSuite {
   }
 
   test("create/insert") {
-    val c1S = "CREATE TABLE t(a INT, b STRING)"
+    val c1S = "CREATE TABLE t(a Int, b STRING)"
     val c1E = Create("t", Left(List(("a", TypeInt), ("b", TypeString))))
     assert(expectParse(create, c1S)(Some(c1E == _)), "create with schema")
 
@@ -131,7 +131,7 @@ class ParserTestSuite extends FunSuite {
   }
 
   test("update") {
-    val uS = "UPDATE t ASSUMING ASC c SET c1 = 10 WHERE a > 10 GROUP BY h HAVING sums(a) > 10"
+    val uS = "update t Assuming AsC c SET c1 = 10 WHERE a > 10 GROUP BY h HAVING sums(a) > 10"
     val uE = Update(
       "t",
       ("c1", IntLit(10)) :: Nil,
@@ -217,9 +217,9 @@ class ParserTestSuite extends FunSuite {
 
   test("complete query") {
     val q1S = """
-      SELECT sum(a) as sumA
+      SELECT Sum(a) as sumA
       FROM t
-      ASSUMING ASC c1, ASC c2
+      ASSUMING asc c1, Asc c2
       WHERE a > 100 AND b < 20
       GROUP BY c * 10 as ced HAVING count(d) > 10
     """

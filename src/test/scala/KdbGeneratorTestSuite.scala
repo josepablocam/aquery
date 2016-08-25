@@ -84,11 +84,11 @@ class KdbGeneratorTestSuite extends FunSuite {
           y := x ^ 3;
           l := LIST(1,2,3,4,5,6);
           z :=
-            CASE l
+            Case l
               WHEN 2 THEN -1
               WHEN 3 THEN 100
               ELSE 200
-            END;
+            EnD;
           w := sums(2, l);
           LIST(sqrt(y), z, w)}
           <q> .aq.f:f; </q>
@@ -116,7 +116,7 @@ class KdbGeneratorTestSuite extends FunSuite {
     val acode =
       """
         <q> base:([]c1:1000?100; c2:1000?100; c3:1000?100) </q>
-        CREATE TABLE aq_t1 (c1 INT, c2 STRING, c3 BOOLEAN)
+        CrEaTE table aq_t1 (c1 INT, c2 STRING, c3 BOOLEAN)
         CREATE TABLE aq_t2 AS
           SELECT
           c1 * 2 as c1, sums(c2) as c2, max(c3) as max_c3
@@ -145,7 +145,7 @@ class KdbGeneratorTestSuite extends FunSuite {
     val acode =
       """
          <q> base:([]c2:1 2 3 4; c3:100 200 300 400) </q>
-         CREATE TABLE t (c1 INT, c2 INT, c3 STRING)
+         CREATE TABLE t (c1 int, c2 INT, c3 string)
          INSERT INTO t VALUES(1, 2, "c")
          INSERT INTO t VALUES(10, 20, "C")
          INSERT INTO t(c1, c2, c3)

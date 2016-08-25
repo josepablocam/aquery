@@ -43,7 +43,12 @@ object AqueryParser extends StandardTokenParsers with PackratParsers {
         | failure("illegal character")
         )
 
-    // use canonical representation to handle keywords that must be uppercase
+    // we allow all cases for keywords
+    override def processIdent(name: String) = {
+      // return keyword with same case as occasionally some kw can be used as identifiers
+      if (reserved.contains(name.toUpperCase)) Keyword(name) else Identifier(name)
+    }
+
     reserved ++= keywords.flatMap(w => w.canonical)
     delimiters +=(
       "@", "*", "+", "-", "<", "=", "<>", "!=", "<=", ">=", ">", "/", "(", ")", "==",
@@ -51,15 +56,19 @@ object AqueryParser extends StandardTokenParsers with PackratParsers {
   }
 
 
-  // there are some keywords that we always want to be upper case
-  val alwaysUpperCase = Set("TIMESTAMP", "INT", "FLOAT", "STRING", "BOOLEAN", "DATE")
+  // some keywords can occasionally be used as identifiers e.g. select date from t
+  val keyWordsAsIdents = Set("TIMESTAMP", "INT", "FLOAT", "BOOLEAN", "DATE")
 
   // str: string representation, fun: keyword is a valid built-in function
-  protected case class Keyword(str: String, fun: Boolean = false) {
-    lazy val canonical =  List(str.toUpperCase) :::
-      (if (!alwaysUpperCase.contains(str.toUpperCase)) List(str.toLowerCase) else Nil)
+  protected case class Keyword(str: String, fun: Boolean = false, ignoreCase: Boolean = true) {
+    // all keywords allow any case but canonical is upper case
+    lazy val canonical =  List(str.toUpperCase)
 
-    lazy val parser: Parser[Keyword] = canonical.map(x => x: Parser[String]).reduce(_ | _) ^^^ this
+    // parser must reflect cases allowed (i.e. canonical and others)
+    lazy val parser: Parser[Keyword] = (
+      canonical.map(x => x: Parser[String]).reduce(_ | _) ^^^ this
+        | acceptMatch(str, { case x if canonical.contains(x.chars.toUpperCase) => this })
+      )
   }
   // implicit for convenience
   protected implicit def asParser(k: Keyword): Parser[Keyword] = k.parser
@@ -161,7 +170,6 @@ object AqueryParser extends StandardTokenParsers with PackratParsers {
   protected val WITH = Keyword("WITH")
   protected val WHEN = Keyword("WHEN")
   protected val WHERE = Keyword("WHERE")
-
 
   // Use reflection to find the reserved words defined in this class.
   protected val reservedWords = this
@@ -280,7 +288,6 @@ object AqueryParser extends StandardTokenParsers with PackratParsers {
 
   // Where clause is an "AND" separated list of predicates or expressions
   def where: Parser[List[Expr]] = rep1sep(predicate | expr, AND)
-
 
   // Predicates commonly used in where clauses
   // This is a bit dense but the general idea is we're trying to avoid repetition just due
@@ -511,16 +518,7 @@ object AqueryParser extends StandardTokenParsers with PackratParsers {
       | builtin ~ ("(" ~> repsep(expr, ",") <~ ")") ^^ { case f ~ args => FunCall(f.str.toUpperCase, args) }
       )
 
-  // reflection to get all built-in functions
-  def builtin: Parser[Keyword] =
-    this
-      .getClass
-      .getMethods
-      .filter(_.getReturnType == classOf[Keyword])
-      .map(_.invoke(this).asInstanceOf[Keyword])
-      .filter(_.fun)
-      .map(_.parser).reduce(_ | _)
-
+  def builtin: Parser[Keyword] = reservedWords.map(_.parser).reduce(_ | _)
 
   lazy val baseExp: PackratParser[Expr] =
     positioned(lit
@@ -531,7 +529,6 @@ object AqueryParser extends StandardTokenParsers with PackratParsers {
       | tableExp
       | id
       )
-
 
   // Constants/literals
   def lit: Parser[Lit] =
@@ -561,6 +558,15 @@ object AqueryParser extends StandardTokenParsers with PackratParsers {
     positioned(elem("timestamp", _.isInstanceOf[lexical.Timestamp]) ^^ { x => TimestampLit(x.chars) })
 
   def id: Parser[Id] = positioned(ident ^^ {n => Id(n)})
+
+  // ident extended to handle also keywords that can be idents
+  // note that acceptance is done based on upper case version but we return the original
+  // as it functions as an identifier
+  override def ident: Parser[String] =
+    acceptMatch("extended identifier", {
+      case lexical.Identifier(str) => str
+      case lexical.Keyword(str) if keyWordsAsIdents.contains(str.toUpperCase) => str
+    })
 
   /**
    * Parse a string as a given non-terminal
