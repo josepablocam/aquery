@@ -430,7 +430,7 @@ object BasicOptimizer {
    */
   def inferColName(e: Expr): Option[String] = e match {
     case Id(v) => Some(v)
-    case ColumnAccess(t, c) => Some("t" + "." + c)
+    case ColumnAccess(t, c) => Some(t + "." + c)
     case _ => None
   }
 
