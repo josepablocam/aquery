@@ -195,9 +195,15 @@ class BasicOptimizer(val input: Seq[TopLevel] = Nil, val optims: Seq[String] = N
    */
   def makeReorderFilter(r: RelAlg): RelAlg = {
     val optim: PartialFunction[RelAlg, RelAlg] = {
-      case Filter(src, fs, attr) =>
-        // copy over attributes as well
-        cutFilters(fs).foldLeft(src) { case (s, f) => ReorderFilter(s, f.toList, attr) }
+      case node @ Filter(src, fs, attr) =>
+        val safeRegions = cutFilters(fs)
+        // no point in cutting up filter if each movable section is a singleton
+        if (safeRegions.forall(_.length == 1))
+          node
+        else
+          // copy over attributes as well
+          safeRegions.foldLeft(src) { case (s, f) => ReorderFilter(s, f.toList, attr) }
+
     }
     r.transform(optim)
   }

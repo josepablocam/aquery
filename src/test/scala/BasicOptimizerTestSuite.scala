@@ -221,8 +221,8 @@ class BasicOptimizerTestSuite extends FunSuite {
 
     val query2 = parse(query, "SELECT * FROM t WHERE sums(c1) > 2 AND c4 = 2").get
     val result2 = optimizer.makeReorderFilter(query2)
-    val expect2 = rfilter(rfilter(t("t"), "sums(c1) > 2"), "c4 = 2")
-    assert(result2.children.head === expect2)
+    assert(query2.children.head === result2.children.head, "edge case of singletons keeps same filter")
+
 
     val query3 = parse(query, "SELECT * FROM t WHERE c4 = 2 AND c1 <2 AND sums(c2) > 2").get
     val result3 = optimizer.makeReorderFilter(query3)
@@ -336,7 +336,7 @@ class BasicOptimizerTestSuite extends FunSuite {
         WITH
           temp1 as (
             SELECT c1, c2, sum(c3 * maxs(c0)), sum(c8) as myCol FROM
-            some_t ASSUMING ASC c2, ASC c1 WHERE c2 > 2 AND sums(c6) > 2
+            some_t ASSUMING ASC c2, ASC c1 WHERE cx = 0 and c2 > 2 AND sums(c6) > 2
             GROUP by c2
           )
 
@@ -356,15 +356,15 @@ class BasicOptimizerTestSuite extends FunSuite {
       """
     ).get
     val temp1 =
-      p(g(rfilter(
-        scols(rfilter(t("some_t"), "c2 > 2"), "ASC c2, ASC c1", "c6,c1, c2, c3, c0, c8"),
+      p(g(filter(
+        scols(rfilter(t("some_t"), "cx = 0 AND c2 > 2"), "ASC c2, ASC c1", "c6,c1, c2, c3, c0, c8"),
         "sums(c6) > 2"
       ), "c2"), "c1, c2, sum(c3 * maxs(c0)), sum(c8) as myCol")
 
     val main1 =
       p(
-          scols(g(rfilter(
-          join(rfilter(t("temp1"), "temp1.c0 > 2"), rfilter(t("t"), "t.c3 > 2"), "c1"),
+          scols(g(filter(
+          join(filter(t("temp1"), "temp1.c0 > 2"), filter(t("t"), "t.c3 > 2"), "c1"),
           "add(t.c1, c4) > 2"
         ), "c1"), "asc t.c2", "c1, c2, myCol"),
         "c1, add(c2, myCol), myAvg(c0)"
