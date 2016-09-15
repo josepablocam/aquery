@@ -565,7 +565,19 @@ class KdbGenerator(val runQueries: Boolean = true) extends BackEnd {
    * @param p
    * @return
    */
-  def genProject(p: Project): CodeGen = {
+  def genProject(p: Project): CodeGen = p match {
+    case Project(g @ GroupBy(rest, _, Nil, _), _, _) if simpleGroupReferences(p, g) =>
+      genProjectSimpleGrouped(p, g, rest)
+    case _ => genProjectStandard(p)
+  }
+
+  /**
+   * Generate code for standard project, meaning generate code for the node below project, then
+   * generate code for project.
+   * @param p
+   * @return
+   */
+  def genProjectStandard(p: Project): CodeGen = {
     val cleanProjections = addColNames(p.ps)
     for (
       before <- genRelAlg(p.t);
@@ -573,6 +585,70 @@ class KdbGenerator(val runQueries: Boolean = true) extends BackEnd {
       ps <- genExprDict(cleanProjections, kdbSym)
     ) yield s"$before\n $t:${kdbSelect(Some(t), None, None, Some(ps))};"
   }
+
+
+  /**
+   * Check that all references to group-by columns are simple, and thus we can use
+   * the usual kdb+ execution. Otherwise, e.g, if we want to use the column in a complicated
+   * expression, we settle for the staged execution of the group-by (this guarantees semantics)
+   * TODO: this could probably be simplified
+   * @param p
+   * @param g
+   * @return
+   */
+  def simpleGroupReferences(p: Project, g: GroupBy): Boolean = {
+    def colsUsed(e: Expr): Set[String] = e match {
+      case Id(n) => Set(n)
+      case _ => e.children.flatMap(colsUsed).toSet
+    }
+    val namedGroups = addColNames(g.gs)
+    val names = namedGroups.map(_._2).toSet
+    // check if safe to inline based on named group references
+    p.ps.forall { case (e, _) =>
+      val usesGroupCols = colsUsed(e).intersect(names).nonEmpty
+      val simpleRef = e match { case Id(_) => true; case _ => false }
+      // no references is of course safe, as are simple references
+      !usesGroupCols || simpleRef
+    }
+  }
+
+
+  /**
+   * Generate code for a projection right above a simple group by (i.e no having). Kdb performs
+   * this operation much better than we can with the standard approach (i.e. group, then modify
+   * calls to verbs to use each)
+   * @param p project node
+   * @param g simple group by node
+   * @param rest rest of tree
+   * @return
+   */
+  def genProjectSimpleGrouped(p: Project, g: GroupBy, rest: RelAlg): CodeGen = {
+    val namedGroups = addColNames(g.gs)
+    val groupNames = namedGroups.map(_._2)
+    val namedProjections = addColNames(p.ps)
+    // remove projections that references a group column by name
+    // note that we've guaranteed these are simple group references
+    val beforeAgg = namedProjections.filter {
+      case (Id(ref), _) => !groupNames.contains(ref)
+        // all others are safe to execute before final refinement step
+      case _ => true
+    }
+
+    // create a final selection, for projections that were already executed
+    // just query the name, for all others (i.e. those referencing group cols) add as they are
+    val finalProjection = namedProjections.map {
+      case pair @ (_, nm) if beforeAgg.contains(pair) => (Id(nm), nm)
+      case x => x
+    }
+    for (
+      before <- genRelAlg(rest);
+      t <- getCurrTable;
+      ps <- genExprDict(beforeAgg, getColLookup);
+      gs <- genExprDict(namedGroups, getColLookup);
+      refine <- genExprDict(finalProjection, kdbSym)
+    ) yield s"$before\n $t:${kdbSelect(Some(t), None, Some(gs), Some(ps))};\n $t:${kdbSelect(Some(t), None, None, Some(refine))};"
+  }
+
 
   /**
    * Generate code for a top-apply function. Currently only allows: SHOW/DISTINCT/EXEC ARRAYS
