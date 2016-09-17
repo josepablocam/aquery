@@ -86,7 +86,7 @@
 //full outer join using (definition compliant with traditional sql semantics
 // from ej
 k).aq.ejix:{(=x#z:0!z)x#y:0!y};
-.aq.foju:{
+.aq.fojuStd:{
   nix:.aq.ejix[x:(),x;y:0!y;z:0!z];
   iz:raze nix; //indices in z for equijoin
   iy:where count each nix; // indices in y for equijoin
@@ -95,6 +95,11 @@ k).aq.ejix:{(=x#z:0!z)x#y:0!y};
   mz:select from z where not i in iz; // records z not in equi join
   ejr upsert/(my;mz) // add missing records
   };
+// faster full outer join assumes t2 is keyed (so unique), and joining on those keys, so we can use lj
+.aq.fojuFast:{[t1;t2]
+   addMissing:{[j;r] j upsert/0!((keys r)#j)_r};
+   addMissing[t1 lj t2;t2]
+ };
 // nested join
 .aq.nj:{[t1;t2;p] raze {?[x,'count[x]#enlist y;z;0b;()]}[t1; ;p] each t2};
 
@@ -121,7 +126,19 @@ k).aq.ejix:{(=x#z:0!z)x#y:0!y};
 .aq.iskey:{(count[k]>0)&min (k:keys x) in y};
 
 // faster equi join based on keyed or not
-.aq.ej:{[k;t1;t2] $[(kt2:.aq.iskey[t1;k])|kt1:.aq.iskey[t2;k]; $[kt1;t1 ij t2;t2 ij t1]; ej[k;t1;t2]]};
+.aq.ej:{[k;t1;t2] $[(kt1:.aq.iskey[t1;k])|kt2:.aq.iskey[t2;k]; $[kt1;t2 ij t1;t1 ij t2]; ej[k;t1;t2]]};
+.aq.foju:{[k;t1;t2]
+  $[(kt1:.aq.iskey[t1;k])|kt2:.aq.iskey[t2;k];
+    $[kt1 & kt2;
+        t1 uj t2;
+      kt1;
+        .aq.fojuFast[t2;t1];
+        .aq.fojuFast[t1;t2]
+     ];
+    .aq.fojuStd[k;t1;t2]
+    ]
+
+ };
 
 // check attributes
 .aq.chkattr:{[x;t] any (.aq.cd where any each flip .aq.cd like/: "*",/:string (),x) in exec c from meta t where not null a};
