@@ -33,7 +33,7 @@
 //Test 5.6: pg 33, example 3.6
 .kdb.q5:{
      OneDay:select ID, price, timestamp from `timestamp xasc Ticks where date=pointDate;
-     0!select ct:count i by ID from `timestamp xasc OneDay where i < 1000
+     select ct:count i by ID from `timestamp xasc OneDay where i < 1000
  }
 
 //Test 5.7: moving average over arrables
@@ -42,7 +42,7 @@
 
 //Test 5.8:
 //recreating innerjoin semantics from traditional sql
-.kdb.q7:{0!select avg_price:10 mavg ClosePrice by ID from `date xasc ej[`ID`date;`ID`date xcol TradedStocks;`ID xcol HistoricQuotes]}
+.kdb.q7:{select avg_price:10 mavg ClosePrice by ID from `date xasc ej[`ID`date;`ID`date xcol TradedStocks;`ID xcol HistoricQuotes]}
 
 .kdb.q8:{select last_price:last price from `name`timestamp xasc ej[`ID;base;Ticks] where name=`x}
 

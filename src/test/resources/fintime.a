@@ -16,28 +16,28 @@ WITH
   weekly(Id, bucket, name, low, high, mean) AS (select
     Id,
     timeBucket,
-    "weekly",
+    name,
     min(ClosePrice),
 	  max(ClosePrice), avg(ClosePrice)
-  	from Target group by Id, getWeek(TradeDate) as timeBucket)
+  	from Target group by Id, getWeek(TradeDate) as timeBucket,  "weekly" as name)
 
   monthly(Id, bucket, name, low, high, mean) AS (select
     Id,
     timeBucket,
-    "monthly",
+    name,
      min(ClosePrice),
 	   max(ClosePrice),
      avg(ClosePrice)
-  	 from Target group by Id, getMonth(TradeDate) as timeBucket)
+  	 from Target group by Id, getMonth(TradeDate) as timeBucket,  "monthly" as name)
 
   yearly(Id, bucket, name, low, high, mean) AS (select
     Id,
     timeBucket,
-    "yearly",
+    name,
      min(ClosePrice),
 	   max(ClosePrice),
      avg(ClosePrice)
-  	 from Target group by Id, getYear(TradeDate) as timeBucket)
+  	 from Target group by Id, getYear(TradeDate) as timeBucket, "yearly" as name)
 
 select Id, bucket, name, low, high, mean from CONCATENATE(weekly, monthly, yearly)
     assuming asc Id, asc name, asc bucket

@@ -155,6 +155,8 @@ k).aq.ejix:{(=x#z:0!z)x#y:0!y};
 // wrapper
 .aq.cond:{[v;ct;e] $[0=count v; .aq.eCond[ct;e]; .aq.searchedCond[v;ct;e]]}
 
+// rekey new table (n) based on keys in old table (o)
+.aq.rekey:{[o;n] $[(k:keys o)~`symbol$();n;k xkey n]}
 
 // Builtins
 // Overloaded built-ins are disambiguated by appending the number of arguments

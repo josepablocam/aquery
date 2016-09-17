@@ -561,14 +561,45 @@ class KdbGenerator(val runQueries: Boolean = true) extends BackEnd {
   }
 
   /**
+   * Makes sure you maintain keys generated from a group-by when projecting
+   * out the columns.
+   * @param p projection
+   * @return keyed table if group-by keys selected, normal table otherwise
+   */
+  def maintainKeys(p: Project): CodeGen = {
+    p.findp { case g: GroupBy => true }.map(_.asInstanceOf[GroupBy]) match {
+      case None => SimpleState.unit("")
+      case Some(g) =>
+        val keys = addColNames(g.gs).map(_._2).toSet
+        val simpleProjs = addColNames(p.ps).collect { case p @ (Id(col), nm) if keys.contains(col) =>  p }
+        val keysSelected = simpleProjs.map { case (Id(nm), _) => nm }.toSet
+        if (keys.forall(keysSelected.contains)) {
+          val newKeys = simpleProjs.map { case (_, nm) => kdbSym(nm)}.mkString("")
+          for(
+            t <- getCurrTable
+          ) yield s" $t:$newKeys xkey $t;"
+        } else
+        SimpleState.unit("")
+    }
+  }
+
+
+  /**
    * Generate code for projection
    * @param p
    * @return
    */
-  def genProject(p: Project): CodeGen = p match {
-    case Project(g @ GroupBy(rest, _, Nil, _), _, _) if simpleGroupReferences(p, g) =>
-      genProjectSimpleGrouped(p, g, rest)
-    case _ => genProjectStandard(p)
+  def genProject(p: Project): CodeGen = {
+    val projGen = p match {
+      case Project(g @ GroupBy(rest, _, Nil, _), _, _) if simpleGroupReferences(p, g) =>
+        genProjectSimpleGrouped(p, g, rest)
+      case _ => genProjectStandard(p)
+    }
+    val keyGen = maintainKeys(p)
+    for (
+      main <- projGen;
+      key <- keyGen
+    ) yield if (key.nonEmpty) s"$main\n$key" else main
   }
 
   /**
@@ -687,7 +718,9 @@ class KdbGenerator(val runQueries: Boolean = true) extends BackEnd {
       t <- getCurrTable
     ) yield {
       val call = if (grouped) ".aq.sortGrouped" else ".aq.sort"
-      s"$before\n $t:$call[$t;$orders;($cols)];"
+      val unkeyed = if (grouped) t else s"0!$t"
+      val rekeyed = if (grouped) "" else s".aq.rekey[$t;] "
+      s"$before\n $t:$rekeyed$call[$unkeyed;$orders;($cols)];"
     }
   }
 

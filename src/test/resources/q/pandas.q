@@ -2,13 +2,13 @@
 .kdb.q0:{select from df_frame where bool_arr}
 
 .kdb.q1:{
- 0!select value1:avg(value1), value2:var(value1), value3:sum(value3) by key1, key2 from df_groupby
+ select value1:avg(value1), value2:var(value1), value3:sum(value3) by key1, key2 from df_groupby
  }
 
-.kdb.q2:{0!select ct:count i by val from s_value_counts}
+.kdb.q2:{select ct:count i by val from s_value_counts}
 
 .kdb.q3:{
-  0!select val:sum(data1) by key1, key2 from df_groupby_multi_python
+  select val:sum(data1) by key1, key2 from df_groupby_multi_python
   }
 
 .kdb.q4:{select from mdf1,mdf2}
