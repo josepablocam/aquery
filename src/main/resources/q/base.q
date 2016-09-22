@@ -1,7 +1,7 @@
-/
-  Base library for aquery code, version 1.0
-  Please report any bugs to jpc485@nyu.edu
-\
+
+//  Base library for aquery code, version 1.0
+//  Please report any bugs to jpc485@nyu.edu
+
 
 // Translation utilities
 // initialize state
