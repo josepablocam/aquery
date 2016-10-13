@@ -72,7 +72,14 @@ java -jar aquery.jar -h
 
 For convenience, we recommend creating a simple bash script that wraps the call to java and adding this to your path.
 
-For following examples, we assume that we have this script available by the name ```a2q```
+```
+cat ./a2q
+#!/bin/bash
+java -jar target/scala-2.11/aquery.jar $*
+```
+
+For following examples, we assume that we have this script available by the name ```a2q``` and you have added the location
+of the script to your `PATH` variable (so that you can call as simply `a2q`).
 
 
 The most common command will likely be
