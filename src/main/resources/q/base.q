@@ -80,7 +80,14 @@
   .aq.cd,:jui`remap;
   l:.aq.drcols[l;jui`rename];
   r:.aq.drcols[r;jui`rename];
-  jf[.aq.cd cs;l;r]
+  // handle joining on entirety of table
+  el:count[cols l]=count cs;
+  er:count[cols r]=count cs;
+  // if joining on entirety of table add dummy column to avoid rank/length errors
+  l:$[el;update aq__dummy:1 from l;l];
+  r:$[er;update aq__dummy:1 from r;r];
+  res:jf[.aq.cd cs;l;r];
+  $[el|er;delete aq__dummy from res;res]
  }
 
 //full outer join using (definition compliant with traditional sql semantics

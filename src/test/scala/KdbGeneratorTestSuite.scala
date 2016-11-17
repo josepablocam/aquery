@@ -268,6 +268,42 @@ class KdbGeneratorTestSuite extends FunSuite {
     assert(passed1, "optimized: " + msg1)
   }
 
+  test("joining on all columns") {
+    val acode =
+      """
+         <q>
+          t1a:([] c1:1 2 3; c2:10 20 30);
+          t2a:([] c1:1 2 3; c2:10 20 30);
+          t1p:update c3:100 from t1a;
+          t2p:update c4:100 from t2a;
+         </q>
+
+         CREATE TABLE t1at2a as
+          SELECT c1 FROM t1a INNER JOIN t2a USING (c1, c2)
+
+         CREATE TABLE t1at2p as
+          SELECT c1 FROM t1a INNER JOIN t2p USING (c1, c2)
+
+         CREATE TABLE t1pt2a as
+          SELECT c1 FROM t1p INNER JOIN t2a USING (c1, c2)
+
+        <q> .aq.q0:{t1at2a}; .aq.q1:{t1at2p}; .aq.q2:{t1pt2a}; </q>
+      """
+    val qcode =
+      """
+        .kdb.q0:{select c1 from ej[`c1`c2;t1p;t2p]};
+        .kdb.q1:{select c1 from ej[`c1`c2;t1p;t2p]};
+        .kdb.q2:{select c1 from ej[`c1`c2;t1p;t2p]};
+      """
+
+    val tests = "q0"
+    val (passed0, msg0) = run(acode, qcode, tests, optimize = false)
+    assert(passed0, "basic: " + msg0)
+
+    val (passed1, msg1) = run(acode, qcode, tests, optimize = true)
+    assert(passed1, "optimized: " + msg1)
+  }
+
   test("simple.a") {
     val acode = getCode("simple.a")
     val qcode = getCode("q/simple.q")
