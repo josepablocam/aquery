@@ -52,7 +52,7 @@
 .kdb.pythag:{sqrt (x*x)+y*y}
 .kdb.q10:{ .kdb.pythag[3;4]}
 
-.kbd.q11:{ (`c1 xasc t2) upsert `c2`c1!-1 -2 }
+.kdb.q11:{ (`c1 xasc t2) upsert `c2`c1!-1 -2 }
 .kdb.q12:{
     0!update c3:last sums c2 by c1, c2 from `c2 xasc tu1 where c1 < 3, 2 <=(count;i) fby ([]c1;c2);
   }
